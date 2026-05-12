@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+cloudfunctions/*/node_modules/
+.env
+*.log
+project.private.config.json
+.kiro/

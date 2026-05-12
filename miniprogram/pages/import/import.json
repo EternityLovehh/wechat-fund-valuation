@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "导入持仓",
+  "requiredPrivateInfos": ["chooseMedia"],
+  "permission": {
+    "scope.camera": {
+      "desc": "需要使用相机拍摄持仓截图"
+    }
+  }
+}

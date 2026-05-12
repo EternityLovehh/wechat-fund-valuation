@@ -1,0 +1,230 @@
+<!--detail.wxml - 基金详情页面-->
+<wxs module="utils">
+var toFixed = function(value, digits) {
+  var num = parseFloat(value);
+  if (isNaN(num)) {
+    return '0.00';
+  }
+  return num.toFixed(digits || 2);
+}
+
+module.exports = {
+  toFixed: toFixed
+}
+</wxs>
+
+<view class="container">
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+  <scroll-view wx:else scroll-y class="content">
+    <!-- 基金标题 -->
+    <view wx:if="{{fund}}" class="fund-title">
+      <view class="fund-name">{{fund.name}}</view>
+      <view class="fund-code-row">
+        <text class="fund-code">{{fund.code}}</text>
+        <!-- 份额类别切换按钮（仅从持仓页进入且有持仓时显示） -->
+        <view wx:if="{{from === 'holding' && holding}}" class="switch-share-class" bindtap="showShareClassSelector">
+          切换份额类别
+        </view>
+      </view>
+    </view>
+
+    <!-- 三列数据展示区 -->
+    <view wx:if="{{fund}}" class="data-grid">
+      <!-- 第一行：基金基本数据（所有用户可见） -->
+      <view class="grid-row">
+        <view class="grid-item">
+          <view class="grid-label">当日涨幅</view>
+          <view class="grid-value {{dayGrowth >= 0 ? 'positive' : 'negative'}}">
+            {{dayGrowth >= 0 ? '+' : ''}}{{utils.toFixed(dayGrowth, 2)}}%
+          </view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">近一年</view>
+          <view class="grid-value {{yearGrowth >= 0 ? 'positive' : 'negative'}}">
+            {{yearGrowth >= 0 ? '+' : ''}}{{utils.toFixed(yearGrowth, 2)}}%
+          </view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">基金热度排名</view>
+          <view class="grid-value">{{fundHeat > 0 ? fundHeat + '/25100' : '202/25100'}}</view>
+        </view>
+      </view>
+
+      <!-- 第二行：持仓基础数据（仅从持仓页进入且有持仓时显示） -->
+      <view wx:if="{{from === 'holding' && holding}}" class="grid-row">
+        <view class="grid-item">
+          <view class="grid-label">持有金额</view>
+          <view class="grid-value">{{utils.toFixed(holdingAmount, 2)}}</view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">持仓占比</view>
+          <view class="grid-value">{{utils.toFixed(holdingRatio, 2)}}%</view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">持仓成本</view>
+          <view class="grid-value">{{utils.toFixed(holding.cost, 4)}}</view>
+        </view>
+      </view>
+
+      <!-- 第三行：收益数据（仅从持仓页进入且有持仓时显示） -->
+      <view wx:if="{{from === 'holding' && holding}}" class="grid-row">
+        <view class="grid-item">
+          <view class="grid-label">持有收益</view>
+          <view class="grid-value {{holdingProfit >= 0 ? 'positive' : 'negative'}}">
+            {{holdingProfit >= 0 ? '+' : ''}}{{utils.toFixed(holdingProfit, 2)}}
+          </view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">持有收益率</view>
+          <view class="grid-value {{holdingProfitRate >= 0 ? 'positive' : 'negative'}}">
+            {{holdingProfitRate >= 0 ? '+' : ''}}{{utils.toFixed(holdingProfitRate, 2)}}%
+          </view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">持有天数</view>
+          <view class="grid-value">{{holdingDays}}</view>
+        </view>
+      </view>
+
+      <!-- 第四行：昨日收益数据（仅从持仓页进入且有持仓时显示） -->
+      <view wx:if="{{from === 'holding' && holding}}" class="grid-row">
+        <view class="grid-item">
+          <view class="grid-label">昨日收益</view>
+          <view class="grid-value {{yesterdayProfit >= 0 ? 'positive' : 'negative'}}">
+            {{yesterdayProfit >= 0 ? '+' : ''}}{{utils.toFixed(yesterdayProfit, 2)}}
+          </view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label">昨日收益率</view>
+          <view class="grid-value {{yesterdayProfitRate >= 0 ? 'positive' : 'negative'}}">
+            {{yesterdayProfitRate >= 0 ? '+' : ''}}{{utils.toFixed(yesterdayProfitRate, 2)}}%
+          </view>
+        </view>
+        <view class="grid-item">
+          <view class="grid-label"></view>
+          <view class="grid-value"></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 重仓股票 -->
+    <view wx:if="{{holdings && holdings.stocks.length > 0}}" class="section">
+      <view class="section-header">
+        <view class="section-title-row">
+          <text class="section-title">重仓股票</text>
+          <text class="section-date" wx:if="{{holdings.date}}">{{holdings.date}}</text>
+        </view>
+        <view class="stock-header">
+          <text class="header-name">股票</text>
+          <text class="header-ratio">持仓占比</text>
+          <text class="header-change">涨跌幅</text>
+        </view>
+      </view>
+      <view class="stock-list">
+        <view wx:for="{{holdings.stocks}}" wx:key="code" class="stock-item">
+          <view class="stock-left">
+            <view class="stock-name">{{item.name}}</view>
+            <view class="stock-code">{{item.code}}</view>
+          </view>
+          <view class="stock-center">
+            <view class="stock-ratio">{{item.ratio}}</view>
+          </view>
+          <view class="stock-right">
+            <view wx:if="{{item.changePercent !== undefined}}" class="stock-change {{item.changePercent >= 0 ? 'positive' : 'negative'}}">
+              {{item.changePercent >= 0 ? '+' : ''}}{{utils.toFixed(item.changePercent, 2)}}%
+            </view>
+            <view wx:else class="stock-change-loading">--</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 行业配置 -->
+    <view wx:if="{{industry && industry.industries.length > 0}}" class="section">
+      <view class="section-title">
+        行业配置
+        <text class="section-date" wx:if="{{industry.date}}">{{industry.date}}</text>
+      </view>
+      <view class="industry-list">
+        <view wx:for="{{industry.industries}}" wx:key="name" class="industry-item">
+          <view class="industry-info">
+            <text class="industry-name">{{item.name}}</text>
+            <text class="industry-ratio">{{item.ratio}}</text>
+          </view>
+          <view class="industry-bar">
+            <view class="industry-bar-fill" style="width: {{item.ratio}}"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 删除按钮（仅从持仓页进入且有持仓时显示） -->
+    <view wx:if="{{from === 'holding' && holding}}" class="delete-section">
+      <button class="delete-holding-btn" bindtap="deleteHolding">删除持仓</button>
+    </view>
+    
+    <view style="height: 40rpx;"></view>
+  </scroll-view>
+
+  <!-- 操作按钮（固定在底部，仅从持仓页进入时显示） -->
+  <view wx:if="{{from === 'holding'}}" class="actions">
+    <button class="action-btn buy" bindtap="showBuyModal">买入</button>
+    <button class="action-btn sell" bindtap="showSellModal">卖出</button>
+  </view>
+
+  <!-- 交易弹窗 -->
+  <view wx:if="{{showTradeModal}}" class="modal-mask" bindtap="closeTradeModal">
+    <view class="modal-content" catchtap="stopPropagation">
+      <view class="modal-title">{{tradeType === 'buy' ? '买入' : '卖出'}}基金</view>
+      
+      <view class="form-item">
+        <text class="form-label">{{tradeType === 'buy' ? '买入金额' : '卖出金额'}}</text>
+        <input 
+          class="form-input" 
+          type="digit" 
+          placeholder="请输入金额" 
+          value="{{tradeAmount}}" 
+          bindinput="onAmountInput"
+          adjust-position="{{false}}"
+        />
+        <text class="form-hint">当前估值：{{fund.estimatedValue}}</text>
+      </view>
+
+      <view class="modal-actions">
+        <button class="modal-btn cancel" bindtap="closeTradeModal">取消</button>
+        <button class="modal-btn confirm" bindtap="confirmTrade">确认</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 份额类别选择弹窗 -->
+  <view wx:if="{{showShareClassModal}}" class="modal-mask" bindtap="closeShareClassModal">
+    <view class="modal-content share-class-modal" catchtap="stopPropagation">
+      <view class="modal-title">选择份额类别</view>
+      
+      <view class="share-class-list">
+        <view 
+          wx:for="{{availableShareClasses}}" 
+          wx:key="code" 
+          class="share-class-item {{item.shareClass === currentShareClass ? 'active' : ''}}"
+          data-code="{{item.code}}"
+          data-name="{{item.name}}"
+          bindtap="switchShareClass"
+        >
+          <view class="share-class-name">{{item.name}}</view>
+          <view class="share-class-badge">{{item.shareClass}}类</view>
+          <view wx:if="{{item.shareClass === currentShareClass}}" class="share-class-check">✓</view>
+        </view>
+      </view>
+
+      <view class="share-class-tip">
+        提示：切换份额类别会保持持有金额和收益不变
+      </view>
+
+      <view class="modal-actions">
+        <button class="modal-btn cancel" bindtap="closeShareClassModal">取消</button>
+      </view>
+    </view>
+  </view>
+</view>

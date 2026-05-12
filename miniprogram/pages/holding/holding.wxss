@@ -1,0 +1,262 @@
+/**holding.wxss - 持仓页面**/
+page {
+  height: 100%;
+  background: #f5f5f5;
+}
+
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+}
+
+.summary {
+  background: white;
+  color: #333;
+  padding: 30rpx;
+  text-align: center;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.summary-title {
+  font-size: 24rpx;
+  color: #999;
+  margin-bottom: 8rpx;
+}
+
+.summary-value {
+  font-size: 48rpx;
+  font-weight: bold;
+  margin-bottom: 12rpx;
+  letter-spacing: 1rpx;
+  color: #333;
+}
+
+.summary-profit-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24rpx;
+  margin-bottom: 16rpx;
+}
+
+.summary-profit {
+  font-size: 28rpx;
+  font-weight: 600;
+  opacity: 1;
+  letter-spacing: 0.5rpx;
+}
+
+.data-source-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8rpx 12rpx;
+  margin: 4rpx 0 12rpx;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.ds-status {
+  padding: 2rpx 12rpx;
+  border-radius: 16rpx;
+  background: #f0f0f0;
+  color: #666;
+  font-weight: 500;
+}
+.ds-status.ds-trading {
+  background: #ffeae0;
+  color: #ff5722;
+}
+.ds-status.ds-lunch,
+.ds-status.ds-pre-open,
+.ds-status.ds-post-close {
+  background: #eef4ff;
+  color: #4a8cff;
+}
+.ds-status.ds-weekend {
+  background: #f0f0f0;
+  color: #999;
+}
+
+.ds-item {
+  color: #888;
+}
+.ds-hint {
+  width: 100%;
+  text-align: center;
+  font-size: 20rpx;
+  color: #bbb;
+  margin-top: 2rpx;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+
+.import-btn, .clear-btn {
+  flex: 1;
+  background: #7CB9E8;
+  color: white;
+  font-size: 26rpx;
+  border: none;
+  padding: 12rpx 24rpx;
+  height: auto;
+  line-height: 1.4;
+  border-radius: 8rpx;
+  font-weight: 500;
+}
+
+.clear-btn {
+  background: #ff5722;
+}
+
+.loading, .empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #999;
+  background: white;
+}
+
+.empty-tip {
+  margin-top: 20rpx;
+  font-size: 24rpx;
+  color: #ccc;
+}
+
+/* 列表容器 */
+.fund-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.list-header {
+  display: flex;
+  height: 70rpx;
+  align-items: center;
+  background: #f8f8f8;
+  padding: 0 24rpx;
+  flex-shrink: 0;
+  gap: 12rpx;
+}
+
+.header-name {
+  flex: 4;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.header-amount {
+  flex: 2;
+  text-align: right;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.header-profit {
+  flex: 2;
+  text-align: right;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.list-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  border-bottom: 1rpx solid #f5f5f5;
+  transition: background 0.2s;
+  gap: 12rpx;
+}
+
+.list-item:active {
+  background: #f8f9fa;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.item-name {
+  flex: 4;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6rpx;
+}
+
+.fund-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fund-code {
+  font-size: 22rpx;
+  color: #999;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.fund-ratio {
+  font-size: 22rpx;
+  font-weight: 500;
+  color: #7CB9E8;
+  flex-shrink: 0;
+}
+
+.item-amount {
+  flex: 2;
+  text-align: right;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.item-profit {
+  flex: 2;
+  text-align: right;
+}
+
+.profit-rate {
+  font-size: 26rpx;
+  font-weight: 700;
+  margin-bottom: 4rpx;
+}
+
+.profit-amount {
+  font-size: 22rpx;
+  font-weight: 500;
+}
+
+.positive {
+  color: #f56c6c;
+}
+
+.negative {
+  color: #67c23a;
+}

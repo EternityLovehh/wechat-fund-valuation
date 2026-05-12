@@ -1,0 +1,436 @@
+/**import.wxss - 导入持仓页面**/
+page {
+  height: 100%;
+  background: #f5f5f5;
+}
+
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+  align-items: stretch !important;
+}
+
+/* 顶部标题栏 */
+.header {
+  background: #7CB9E8;
+  color: white;
+  padding: 25rpx 30rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.help-btn {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 8rpx 18rpx;
+  border-radius: 30rpx;
+  font-size: 24rpx;
+}
+
+/* 标签切换 */
+.tabs {
+  background: white;
+  display: flex;
+  padding: 20rpx 30rpx;
+  gap: 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  color: #666;
+  border-radius: 12rpx;
+  background: #f5f5f5;
+  transition: all 0.3s;
+}
+
+.tab.active {
+  background: #7CB9E8;
+  color: white;
+  font-weight: bold;
+}
+
+/* 手动输入表单 */
+.manual-input-form {
+  background: white;
+  border-radius: 12rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+}
+
+.input-group {
+  margin-bottom: 24rpx;
+}
+
+.input-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 12rpx;
+}
+
+.form-input {
+  background: #f8f9fa;
+  height: 80rpx;
+  padding: 0 20rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.input-row {
+  display: flex;
+  margin-bottom: 24rpx;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.margin-left {
+  margin-left: 20rpx;
+}
+
+.add-to-list-btn {
+  width: 100% !important;
+  height: 80rpx;
+  line-height: 80rpx;
+  background: #7CB9E8;
+  color: white;
+  font-size: 28rpx;
+  font-weight: bold;
+  border-radius: 40rpx;
+  margin-top: 20rpx;
+  padding: 0;
+}
+
+/* 批量导入 */
+.batch-import, .ocr-import {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20rpx;
+  overflow: hidden;
+}
+
+/* 提示区域 */
+.tips {
+  background: white;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.tips-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.tips-text {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.6;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.tips-example {
+  font-size: 22rpx;
+  color: #999;
+  display: block;
+  margin-top: 12rpx;
+  padding: 12rpx;
+  background: #f8f9fa;
+  border-radius: 8rpx;
+  font-family: monospace;
+}
+
+.tips-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.example-btn {
+  flex: 1;
+  height: 56rpx;
+  line-height: 56rpx;
+  background: #f5f5f5;
+  color: #666;
+  font-size: 24rpx;
+  border-radius: 8rpx;
+  border: none;
+  padding: 0;
+}
+
+.example-btn.template {
+  background: #e3f2fd;
+  color: #2196f3;
+}
+
+.example-btn.paste {
+  background: #fff3e0;
+  color: #ff9800;
+}
+
+/* 输入区域 */
+.input-area {
+  position: relative;
+  flex: 1;
+  background: white;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-textarea, .result-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 300rpx;
+  font-size: 26rpx;
+  line-height: 1.8;
+  font-family: monospace;
+  color: #333;
+  background: transparent;
+}
+
+.clear-btn {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  width: 48rpx;
+  height: 48rpx;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-icon {
+  color: white;
+  font-size: 36rpx;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* 主按钮 */
+.primary-btn {
+  width: 100%;
+  height: 88rpx;
+  background: #7CB9E8;
+  color: white;
+  font-size: 32rpx;
+  font-weight: bold;
+  border-radius: 12rpx;
+  border: none;
+  margin-bottom: 20rpx;
+}
+
+.primary-btn.import, .import-btn {
+  background: #ff5722;
+}
+
+.parse-btn {
+  background: #2196f3;
+}
+
+/* 结果区域 */
+.result-section, .ocr-result, .preview {
+  background: white;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.result-header, .preview-header {
+  margin-bottom: 16rpx;
+}
+
+.result-title, .preview-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.result-list, .preview-list {
+  max-height: 400rpx;
+  margin-bottom: 20rpx;
+}
+
+.result-item, .preview-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx;
+  background: #f8f9fa;
+  border-radius: 8rpx;
+  margin-bottom: 12rpx;
+}
+
+.item-main, .item-info {
+  flex: 1;
+}
+
+.item-code {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #7CB9E8;
+  margin-bottom: 8rpx;
+}
+
+.item-info {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 24rpx;
+}
+
+.info-label {
+  color: #999;
+}
+
+.info-value {
+  color: #333;
+  font-weight: 500;
+}
+
+.item-detail {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.item-delete, .item-action {
+  width: 48rpx;
+  height: 48rpx;
+  background: #ff5722;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 16rpx;
+}
+
+.delete-icon {
+  color: white;
+  font-size: 32rpx;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* 上传区域 */
+.upload-area {
+  margin-bottom: 20rpx;
+}
+
+.upload-btn {
+  width: 100%;
+  height: 180rpx;
+  background: #7CB9E8;
+  border-radius: 12rpx;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  color: white;
+}
+
+.upload-btn .icon {
+  font-size: 64rpx;
+}
+
+.upload-btn .text {
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+/* 图片预览 */
+.image-preview {
+  background: white;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.image-item {
+  position: relative;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.preview-image-small {
+  width: 100%;
+  height: 100%;
+}
+
+.remove-icon {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  width: 40rpx;
+  height: 40rpx;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.image-count {
+  font-size: 24rpx;
+  color: #666;
+  text-align: center;
+  margin-bottom: 16rpx;
+}
+
+.reselect-btn {
+  width: 100%;
+  height: 64rpx;
+  background: #f5f5f5;
+  color: #666;
+  font-size: 26rpx;
+  border-radius: 8rpx;
+  border: none;
+  margin-bottom: 16rpx;
+}
+
+.ocr-btn {
+  width: 100%;
+  height: 88rpx;
+  background: #7CB9E8;
+  color: white;
+  font-size: 32rpx;
+  font-weight: bold;
+  border-radius: 12rpx;
+  border: none;
+}

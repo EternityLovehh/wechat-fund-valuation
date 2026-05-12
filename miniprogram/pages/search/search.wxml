@@ -1,0 +1,114 @@
+<!--search.wxml - 搜索基金页面-->
+<wxs module="utils">
+var toFixed = function(value, digits) {
+  if (value === null || value === undefined || value === '') {
+    return '0.00';
+  }
+  var num = parseFloat(value);
+  if (isNaN(num)) {
+    return '0.00';
+  }
+  return num.toFixed(digits || 2);
+}
+
+module.exports = {
+  toFixed: toFixed
+}
+</wxs>
+
+<view class="container">
+  <!-- 搜索框 -->
+  <view class="search-header">
+    <view class="search-box">
+      <view class="search-icon">🔍</view>
+      <input 
+        class="search-input" 
+        placeholder="输入基金代码或名称" 
+        value="{{keyword}}"
+        bindinput="onInput"
+        focus="{{true}}"
+        confirm-type="search"
+        bindconfirm="onSearch"
+      />
+      <view wx:if="{{keyword}}" class="clear-icon" bindtap="clearKeyword">✕</view>
+    </view>
+  </view>
+
+  <!-- 搜索中 -->
+  <view wx:if="{{searching}}" class="loading">
+    <view class="loading-text">搜索中...</view>
+  </view>
+
+  <!-- 搜索结果 -->
+  <scroll-view wx:elif="{{results.length > 0}}" scroll-y class="result-list">
+    <view wx:for="{{results}}" wx:key="code" class="fund-item">
+      <view class="fund-content" bindtap="goToDetail" data-code="{{item.code}}">
+        <view class="fund-left">
+          <view class="fund-name-row">
+            <view class="fund-name">{{item.name || '未知基金'}}</view>
+            <view class="fund-type-badge">{{item.type || '其他'}}</view>
+          </view>
+          <view class="fund-code">{{item.code || '---'}}</view>
+        </view>
+        
+        <view class="fund-right">
+          <view class="fund-value-row">
+            <view class="net-value">{{utils.toFixed(item.netValue, 4)}}</view>
+            <view class="estimated-value">{{utils.toFixed(item.estimatedValue, 4)}}</view>
+          </view>
+          <view class="growth-row">
+            <view class="growth {{item.estimatedGrowth >= 0 ? 'positive' : 'negative'}}">
+              {{item.estimatedGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.estimatedGrowth, 2)}}%
+            </view>
+          </view>
+        </view>
+      </view>
+      
+      <view class="fund-action">
+        <button 
+          wx:if="{{item.code}}"
+          class="add-btn {{optionalCodes.indexOf(item.code) >= 0 ? 'added' : ''}}" 
+          bindtap="addToOptional" 
+          data-code="{{item.code}}"
+          data-name="{{item.name}}"
+          disabled="{{optionalCodes.indexOf(item.code) >= 0}}"
+        >
+          {{optionalCodes.indexOf(item.code) >= 0 ? '✓ 已添加' : '+ 添加自选'}}
+        </button>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 无结果 -->
+  <view wx:elif="{{keyword && !searching}}" class="empty">
+    <view class="empty-icon">🔍</view>
+    <view class="empty-text">未找到相关基金</view>
+    <view class="empty-tip">试试其他关键词</view>
+  </view>
+
+  <!-- 默认提示 -->
+  <view wx:else class="tips-container">
+    <view class="tips-section">
+      <view class="tips-title">💡 搜索提示</view>
+      <view class="tips-list">
+        <view class="tip-item">• 输入基金代码：110022</view>
+        <view class="tip-item">• 输入基金名称：易方达消费</view>
+        <view class="tip-item">• 输入关键词：白酒、新能源</view>
+      </view>
+    </view>
+    
+    <view class="hot-section">
+      <view class="section-title">🔥 热门搜索</view>
+      <view class="keyword-grid">
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="白酒">白酒</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="消费">消费</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="新能源">新能源</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="医药">医药</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="科技">科技</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="军工">军工</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="沪深300">沪深300</view>
+        <view class="keyword-item" bindtap="quickSearch" data-keyword="易方达">易方达</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,88 @@
+<!--holding.wxml - 持仓页面-->
+<wxs module="utils">
+var toFixed = function(value, digits) {
+  var num = parseFloat(value);
+  if (isNaN(num)) {
+    return '0.00';
+  }
+  return num.toFixed(digits || 2);
+}
+
+module.exports = {
+  toFixed: toFixed
+}
+</wxs>
+
+<scroll-view 
+  scroll-y 
+  class="container" 
+  refresher-enabled 
+  refresher-triggered="{{refreshing}}" 
+  bindrefresherrefresh="onRefresh"
+>
+  <view class="summary">
+    <view class="summary-title">持仓总金额（按已确认净值）</view>
+    <view class="summary-value">¥{{utils.toFixed(totalValue, 2)}}</view>
+    <view class="summary-profit-row">
+      <view class="summary-profit {{totalDayProfit >= 0 ? 'positive' : 'negative'}}">
+        今日估算 {{totalDayProfit >= 0 ? '+' : ''}}{{utils.toFixed(totalDayProfitRate, 2)}}%
+      </view>
+      <view class="summary-profit {{totalDayProfit >= 0 ? 'positive' : 'negative'}}">
+        {{totalDayProfit >= 0 ? '+' : ''}}¥{{utils.toFixed(totalDayProfit, 2)}}
+      </view>
+    </view>
+    <view wx:if="{{holdings.length > 0}}" class="data-source-bar">
+      <text class="ds-status ds-{{marketStatus}}">{{statusLabel || '--'}}</text>
+      <text wx:if="{{valuationTime}}" class="ds-item">估值 {{valuationTime}}</text>
+      <text wx:if="{{valuationDate}}" class="ds-item">净值 {{valuationDate}}</text>
+      <text class="ds-hint">· 估值仅为预测，盘后净值确认</text>
+    </view>
+    <view class="summary-actions">
+      <button class="import-btn" bindtap="goToImport">导入持仓</button>
+      <button class="clear-btn" bindtap="clearAllHoldings" wx:if="{{holdings.length > 0}}">清空</button>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+  <view wx:elif="{{holdings.length === 0}}" class="empty">
+    <text>暂无持仓</text>
+    <text class="empty-tip">在基金详情页添加持仓</text>
+  </view>
+
+  <view wx:else class="fund-list">
+    <view class="list-header">
+      <view class="header-name">名称/占比</view>
+      <view class="header-amount">金额</view>
+      <view class="header-profit">涨跌/收益</view>
+    </view>
+    
+    <scroll-view scroll-y class="list-body">
+      <view wx:for="{{holdings}}" wx:key="code" class="list-item" bindtap="goToDetail" data-code="{{item.code}}">
+        <view class="item-name">
+          <view class="fund-name">{{item.name}}</view>
+          <view class="fund-code">
+            {{item.code}}
+            <text class="fund-ratio">{{utils.toFixed(item.holdingRatio, 2)}}%</text>
+          </view>
+        </view>
+        
+        <view class="item-amount">
+          ¥{{utils.toFixed(item.currentAmount || item.amount, 2)}}
+        </view>
+        
+        <view class="item-profit">
+          <view class="profit-rate {{item.dayGrowth >= 0 ? 'positive' : 'negative'}}">
+            <block wx:if="{{item.dayGrowth !== 0}}">
+              {{item.dayGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.dayGrowth, 2)}}%
+            </block>
+            <block wx:else>-</block>
+          </view>
+          <view class="profit-amount {{item.todayProfit >= 0 ? 'positive' : 'negative'}}">
+            {{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</scroll-view>

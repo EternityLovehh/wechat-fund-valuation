@@ -1,0 +1,41 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/holding/holding",
+    "pages/search/search",
+    "pages/detail/detail",
+    "pages/import/import"
+  ],
+  "window": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "基金估值助手",
+    "navigationBarBackgroundColor": "#7CB9E8"
+  },
+  "tabBar": {
+    "color": "#8a8a8a",
+    "selectedColor": "#7CB9E8",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "自选",
+        "iconPath": "images/Icon1.png",
+        "selectedIconPath": "images/Icon2.png"
+      },
+      {
+        "pagePath": "pages/holding/holding",
+        "text": "持仓",
+        "iconPath": "images/Icon3.png",
+        "selectedIconPath": "images/Icon4.png"
+      }
+    ],
+    "position": "bottom"
+  },
+  "style": "v2",
+  "componentFramework": "glass-easel",
+  "lazyCodeLoading": "requiredComponents",
+  "miniApp": {
+    "useAuthorizePage": true
+  }
+}
