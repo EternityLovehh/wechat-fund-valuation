@@ -229,12 +229,36 @@ page {
   flex-shrink: 0;
 }
 
+.pending-tag {
+  display: inline-block;
+  margin-left: 10rpx;
+  padding: 2rpx 10rpx;
+  font-size: 20rpx;
+  font-weight: 500;
+  color: #b26a00;
+  background: #fff3e0;
+  border-radius: 6rpx;
+  vertical-align: middle;
+}
+
+.pending-text {
+  color: #b26a00 !important;
+  font-size: 22rpx;
+}
+
 .item-amount {
   flex: 2;
   text-align: right;
   font-size: 26rpx;
   font-weight: 600;
   color: #333;
+}
+
+.amount-pending {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  font-weight: 400;
+  color: #b26a00;
 }
 
 .item-profit {

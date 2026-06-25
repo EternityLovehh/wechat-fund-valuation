@@ -1,6 +1,8 @@
 // holding.ts - 持仓页面
-import { getFundEstimate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getFundEstimate, getNetValueByDate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
+import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
+import { getTodayStr } from '../../utils/appDate'
 
 interface HoldingDisplay extends HoldingFund {
   currentValue: number;
@@ -16,11 +18,12 @@ interface HoldingDisplay extends HoldingFund {
 // 导入的持仓显示（包含实时数据）
 interface ImportedHoldingDisplay extends ImportedHolding {
   type: 'imported'; // 标记为导入类型
-  currentAmount?: number; // 实时金额（根据估值计算）
+  currentAmount?: number; // 实时金额（已确认市值 + 待确认加仓）
   estimatedValue?: number; // 当前估值
   dayGrowth?: number; // 今日涨幅
   todayProfit?: number; // 今日收益
   estimatedShares?: number; // 估算份额
+  pendingAmount?: number; // 待确认加仓金额合计（>0 时 UI 显示"加仓确认中"）
 }
 
 // 统一的持仓显示类型
@@ -68,17 +71,9 @@ Page({
   },
 
   onShow() {
-    // 只在持仓列表变化时才重新加载
-    const currentCodes = this.data.holdings.map(h => h.code).sort().join(',');
-    const manualHoldings = getHoldingFunds();
-    const importedHoldings = getImportedHoldings();
-    const storedCodes = [...manualHoldings, ...importedHoldings].map(h => h.code).sort().join(',');
-
-    if (currentCodes !== storedCodes) {
-      console.log('持仓列表已变化，重新加载');
-      this.loadHoldings();
-    }
-
+    // 每次进入都重新加载：持仓金额/加仓待确认等会在不改变基金代码集合的情况下变化
+    // （如加仓、重新导入同一批基金），只比代码集合会漏掉这些更新，导致显示旧金额。
+    this.loadHoldings();
     this.startAutoRefresh();
   },
 
@@ -115,7 +110,8 @@ Page({
   },
 
   async loadHoldings() {
-    this.setData({ loading: true });
+    // 仅首次（列表为空）显示"加载中"，后续刷新/onShow 原地更新，避免每次闪烁
+    this.setData({ loading: this.data.holdings.length === 0 });
     const holdingFunds = getHoldingFunds(); // 手动输入的持仓
     const importedHoldings = getImportedHoldings(); // 从截图导入的持仓
 
@@ -193,9 +189,10 @@ Page({
       );
 
       // ===== 导入持仓 =====
-      // 优先用导入时锚定的 shares/cost；旧数据无锚定时一次性补锚定并写回 storage
+      // 数据结构：已确认份额/成本 + 待确认加仓 lot。每次加载时把已发布净值的加仓 lot 结算并入。
       const importedResults = await Promise.all(
-        importedHoldings.map(async (h) => {
+        importedHoldings.map(async (raw) => {
+          const h = normalizeHolding(raw); // 旧数据迁移成新结构
           const fallback = (): ImportedHoldingDisplay => ({
             type: 'imported' as const,
             ...h,
@@ -203,7 +200,8 @@ Page({
             estimatedValue: 0,
             dayGrowth: 0,
             todayProfit: 0,
-            estimatedShares: 0
+            estimatedShares: 0,
+            pendingAmount: (h.pendingAdds || []).reduce((s, a) => s + a.amount, 0)
           });
 
           if (!/^\d{6}$/.test(h.code)) {
@@ -216,49 +214,69 @@ Page({
             const netValue = Number(fund.netValue) || 0;
             const estimatedValue = Number(fund.estimatedValue) || netValue;
             const dayGrowth = Number(fund.estimatedGrowth) || 0;
+            const valuationDate = fund.valuationDate || '';
 
-            // 1) 优先使用导入时锚定的 shares；旧数据没有时一次性补锚定
             let shares = Number(h.shares) || 0;
             let cost = Number(h.cost) || 0;
-            if (!shares && netValue > 0 && h.amount > 0) {
-              shares = h.amount / netValue;
-              cost = shares > 0 ? (h.amount - (h.profit || 0)) / shares : 0;
+            let pendingAdds = h.pendingAdds || [];
+
+            // 1) 旧数据无锚定份额、又没有待确认加仓：用 amount/净值一次性补锚定
+            if (!shares && pendingAdds.length === 0 && netValue > 0 && (h.amount || 0) > 0) {
+              shares = (h.amount as number) / netValue;
+              cost = shares > 0 ? ((h.amount as number) - (h.profit || 0)) / shares : 0;
+            }
+
+            // 2) 结算待确认加仓：查每笔加仓申请日的已确认净值，已发布的折成份额并入已确认部分
+            if (pendingAdds.length > 0) {
+              const today = getTodayStr();
+              const navByDate: Record<string, number> = {};
+              await Promise.all(pendingAdds.map(async (add) => {
+                if (!add.date || navByDate[add.date] !== undefined) return;
+                // 申请日 ≥ 今天：当日净值尚未最终确认，保持"确认中"，不结算
+                if (add.date >= today) return;
+                // 申请日就是最新净值日期时直接用当前净值，省一次请求
+                if (valuationDate && add.date === valuationDate && netValue > 0) {
+                  navByDate[add.date] = netValue;
+                } else {
+                  navByDate[add.date] = await getNetValueByDate(h.code, add.date);
+                }
+              }));
+              const settled = settlePendingAdds(shares, cost, pendingAdds, navByDate);
+              shares = settled.shares;
+              cost = settled.cost;
+              pendingAdds = settled.pendingAdds;
+            }
+
+            // 3) 若份额/成本或待确认列表有变化，写回 storage
+            const changed = shares !== (Number(h.shares) || 0)
+              || cost !== (Number(h.cost) || 0)
+              || pendingAdds.length !== (h.pendingAdds || []).length;
+            if (changed) {
               try {
-                saveImportedHolding({
-                  ...h,
-                  shares,
-                  importNetValue: netValue,
-                  cost
-                });
-                console.log('旧导入持仓一次性锚定份额:', h.code, { shares, cost, netValue });
+                saveImportedHolding({ ...h, shares, cost, pendingAdds });
               } catch (e) {
-                console.warn('回写锚定信息失败:', e);
+                console.warn('回写持仓锚定/结算失败:', e);
               }
             }
 
-            // 2) 实时计算
-            // 持有金额按"已确认净值"算 —— 盘中估值跳动不反映在金额里，每日净值更新后才变。
-            const valuationPrice = netValue || estimatedValue;
-            const totalCost = shares > 0 && cost > 0 ? shares * cost : 0;
-            const marketValue = shares > 0 ? shares * valuationPrice : (h.amount || 0);
-            const profit = totalCost > 0 ? (marketValue - totalCost) : (h.profit || 0);
-            const profitRate = totalCost > 0 ? (profit / totalCost) * 100 : (h.profitRate || 0);
-            // 今日盈亏仍按估值口径，盘中实时跳动
-            const todayProfit = shares > 0 ? shares * (estimatedValue - netValue) : 0;
+            // 4) 实时显示计算
+            const calc = computeImportedDisplay(shares, cost, pendingAdds, netValue, estimatedValue);
 
             return {
               type: 'imported' as const,
               ...h,
               shares,
               cost,
-              currentAmount: marketValue, // 用实时市值替代静态 amount
+              pendingAdds,
+              currentAmount: calc.holdingAmount,
+              pendingAmount: calc.pendingAmount,
               estimatedValue,
-              dayGrowth,
-              todayProfit,
+              dayGrowth: shares > 0 ? dayGrowth : 0,
+              todayProfit: calc.todayProfit,
               estimatedShares: shares,
-              profit,
-              profitRate,
-              totalCost
+              profit: calc.profit,
+              profitRate: calc.profitRate,
+              totalCost: calc.totalCost
             } as ImportedHoldingDisplay;
           } catch (e) {
             console.error('获取导入持仓估值失败:', h.code, e);

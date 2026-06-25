@@ -1,6 +1,8 @@
 // import.ts - 导入持仓页面
-import { getFundEstimate, searchFund } from '../../utils/fundApi'
-import { updateHolding, addOptionalFund, saveImportedHoldings, ImportedHolding } from '../../utils/storage'
+import { getFundEstimate, getNetValueByDate, searchFund } from '../../utils/fundApi'
+import { addOptionalFund, saveImportedHoldings, ImportedHolding } from '../../utils/storage'
+import { parseTransactionRecords, buildHoldingFromTxns, TxRecord } from '../../utils/holdingCalc'
+import { getTodayStr } from '../../utils/appDate'
 
 interface ImportItem {
   code: string;
@@ -10,6 +12,12 @@ interface ImportItem {
   profitRate?: number; // 收益率
   shares?: number; // 份额（用于手动输入原格式）
   cost?: number; // 成本（用于手动输入原格式）
+  pendingAdd?: number; // 今日加仓金额（确认前不计收益）
+}
+
+// 当前日期 YYYY-MM-DD（走统一开关，便于调试时整体覆盖）
+function todayStr(): string {
+  return getTodayStr();
 }
 
 Page({
@@ -17,14 +25,17 @@ Page({
     importText: '',
     importList: [] as ImportItem[],
     importing: false,
-    activeTab: 'batch' as 'batch' | 'ocr',
+    activeTab: 'txn' as 'batch' | 'ocr' | 'txn',
     ocrImages: [] as string[],
     ocrResult: '',
     recognizing: false,
     // 新选手手动输入字段
     inputCodeOrName: '',
     inputAmount: '',
-    inputProfit: ''
+    inputProfit: '',
+    inputPendingAdd: '', // 今日加仓金额（可选）
+    // 交易记录导入
+    txnText: ''
   },
 
   onLoad() {
@@ -44,6 +55,25 @@ Page({
   onProfitInput(e: any) {
     this.setData({ inputProfit: e.detail.value });
   },
+  onPendingAddInput(e: any) {
+    this.setData({ inputPendingAdd: e.detail.value });
+  },
+  onTxnInput(e: any) {
+    this.setData({ txnText: e.detail.value });
+  },
+  pasteTxnFromClipboard() {
+    wx.getClipboardData({
+      success: (res) => {
+        if (res.data) {
+          this.setData({ txnText: res.data });
+          wx.showToast({ title: '已粘贴', icon: 'success' });
+        } else {
+          wx.showToast({ title: '剪贴板为空', icon: 'none' });
+        }
+      },
+      fail: () => wx.showToast({ title: '粘贴失败', icon: 'none' })
+    });
+  },
 
   // 添加到待导入列表
   addToList() {
@@ -54,16 +84,25 @@ Page({
       return;
     }
     
+    const { inputPendingAdd } = this.data;
     const amount = parseFloat(inputAmount);
     const profit = parseFloat(inputProfit);
-    
+    const pendingAdd = parseFloat(inputPendingAdd);
+
     if (isNaN(amount) || amount <= 0) {
       wx.showToast({ title: '请输入正确金额', icon: 'none' });
       return;
     }
-    
+
     if (isNaN(profit)) {
       wx.showToast({ title: '请输入正确收益', icon: 'none' });
+      return;
+    }
+
+    // 加仓金额可选；填了则不能超过总持有金额
+    const hasPendingAdd = !isNaN(pendingAdd) && pendingAdd > 0;
+    if (hasPendingAdd && pendingAdd > amount) {
+      wx.showToast({ title: '加仓金额不能超过持有金额', icon: 'none' });
       return;
     }
 
@@ -71,7 +110,8 @@ Page({
       code: inputCodeOrName.trim(),
       name: inputCodeOrName.trim(),
       amount,
-      profit
+      profit,
+      pendingAdd: hasPendingAdd ? pendingAdd : 0
     };
 
     const importList = this.data.importList;
@@ -82,11 +122,12 @@ Page({
     }
 
     importList.push(newItem);
-    this.setData({ 
+    this.setData({
       importList,
       inputCodeOrName: '',
       inputAmount: '',
-      inputProfit: ''
+      inputProfit: '',
+      inputPendingAdd: ''
     });
     
     wx.showToast({ title: '已添加', icon: 'success' });
@@ -96,9 +137,10 @@ Page({
   // 切换标签
   switchTab(e: any) {
     const tab = e.currentTarget.dataset.tab;
-    this.setData({ 
+    this.setData({
       activeTab: tab,
-      importList: []
+      importList: [],
+      txnText: ''
     });
   },
 
@@ -313,6 +355,21 @@ Page({
     console.log('成功:', successCount, '失败:', failCount);
     console.log('识别到的所有文字:', allText);
 
+    if (allText && this.data.activeTab === 'txn') {
+      // 交易记录模式：原始文本直接交给交易记录解析，不走持仓提取
+      this.setData({ txnText: allText, recognizing: false });
+      wx.showModal({
+        title: '识别完成',
+        content: '已识别交易记录文本，是否立即解析并导入？',
+        confirmText: '解析导入',
+        cancelText: '先检查',
+        success: (res) => {
+          if (res.confirm) this.importTransactions();
+        }
+      });
+      return;
+    }
+
     if (allText) {
       // 自动提取基金信息
       const extractedText = this.extractFundInfo(allText);
@@ -423,13 +480,42 @@ Page({
       return true;
     };
     
-    // 先找到所有金额行的位置（作为锚点）
+    // 判断是否是"文本行"（基金名称行）：比 isValidNamePart 宽松，允许名字里带 ()（）·&- 等，
+    // 用于金额锚点的"前一行"判断。关键在于排除数字/百分比行——收益数字的前一行总是金额（数字），据此可区分。
+    const looksLikeName = (line: string): boolean => {
+      if (!line) return false;
+      // 数字 / 带符号数字 / 百分比 一律不是名称
+      if (/^[+\-]?[\d,]+\.?\d*%?$/.test(line)) return false;
+      // 至少包含 2 个连续的中文或字母
+      if (!/[一-龥A-Za-z]{2}/.test(line)) return false;
+      // 过长的多半是广告/提示语，不是名称
+      if (line.length > 24) return false;
+      return true;
+    };
+
+    // 找到所有金额锚点。用两个互补信号判定，避免单一规则误判/漏判：
+    //   信号①：最近的非空前一行是"文本行"（名称），且不是数字 —— 收益数字 0.00 的前一行是金额，被排除。
+    //   信号②：该行之后的若干行内出现收益率（%），确认这是一条真正的持仓行，而非杂项数字。
     const amountLines: number[] = [];
     lines.forEach((line, index) => {
-      if (/^[\d,]+\.\d{2}$/.test(line) && parseFloat(line.replace(/,/g, '')) > 100) {
-        amountLines.push(index);
-        console.log(`找到金额锚点 第${index+1}行: ${line}`);
+      if (!/^[\d,]+\.\d{2}$/.test(line)) return;
+      // 持有金额不可能是 0.00：排除"0.00"昨日收益等被误当成金额锚点
+      if (parseFloat(line.replace(/,/g, '')) <= 0) return;
+      // 信号①：前一行是名称
+      let prev = index - 1;
+      while (prev >= 0 && !lines[prev].trim()) prev--;
+      if (prev < 0 || !looksLikeName(lines[prev])) return;
+      // 信号②：向后 6 行内存在收益率
+      let hasRate = false;
+      for (let j = index + 1; j < Math.min(index + 7, lines.length); j++) {
+        if (/^[+\-]?[\d.]+%$/.test(lines[j])) { hasRate = true; break; }
       }
+      if (!hasRate) {
+        console.log(`跳过疑似金额 第${index+1}行: ${line}（附近无收益率，可能不是持仓行）`);
+        return;
+      }
+      amountLines.push(index);
+      console.log(`找到金额锚点 第${index+1}行: ${line}（名称: ${lines[prev]}）`);
     });
     
     console.log(`共找到 ${amountLines.length} 个金额锚点`);
@@ -440,63 +526,62 @@ Page({
       const amount = lines[amountIndex].replace(/,/g, '');
       console.log(`\n=== 处理金额锚点 第${amountIndex+1}行: ${lines[amountIndex]} ===`);
       
-      // 第一步：向后查找持有收益（第一个带符号的金额）
-      let profitIndex = -1;
-      let totalProfit = '';
+      // 窗口范围：从当前金额到下一个金额锚点之间
       let nextAmountIndex = amountLines[i + 1] || lines.length;
-      
-      for (let j = amountIndex + 1; j < Math.min(amountIndex + 6, nextAmountIndex); j++) {
-        const line = lines[j];
-        
-        // 第一个带符号的金额：持有收益
-        if (/^[+\-][\d,]+\.\d{2}$/.test(line)) {
-          totalProfit = line.replace(/,/g, '');
-          profitIndex = j;
-          console.log(`  第${j+1}行: 找到持有收益 = ${totalProfit}`);
+      const windowEnd = Math.min(nextAmountIndex, lines.length);
+
+      // 第一步：在窗口内定位收益率（百分比），作为这一行基金的右边界
+      let rateIndex = -1;
+      let profitRate = '';
+      for (let j = amountIndex + 1; j < windowEnd; j++) {
+        if (/^[+\-]?[\d.]+%$/.test(lines[j])) {
+          profitRate = lines[j];
+          rateIndex = j;
+          console.log(`  第${j+1}行: 找到收益率 = ${profitRate}`);
           break;
         }
       }
-      
+
+      // 第二步：持有收益 = 收益率之前最后一个金额数值（带符号或不带符号，0.00 也算）
+      // 取"最后一个"可避开靠前的昨日收益，得到真正的持有收益；新买入/零收益基金显示为 0.00
+      let profitIndex = -1;
+      let totalProfit = '';
+      const numberEnd = rateIndex > 0 ? rateIndex : Math.min(amountIndex + 6, windowEnd);
+      for (let j = amountIndex + 1; j < numberEnd; j++) {
+        if (/^[+\-]?[\d,]+\.\d{2}$/.test(lines[j])) {
+          totalProfit = lines[j].replace(/,/g, '');
+          profitIndex = j;
+        }
+      }
       if (!totalProfit) {
-        console.log('  未找到持有收益，跳过此金额');
-        continue;
+        totalProfit = '0.00';
+        console.log('  未找到持有收益数值，默认为 0.00');
+      } else {
+        console.log(`  第${profitIndex+1}行: 找到持有收益 = ${totalProfit}`);
       }
-      
-      // 第二步：从持有收益后查找名称后缀和收益率
+
+      // 第三步：在金额与收益率之间收集名称后缀（份额类别等）
       let nameSuffix = '';
-      let profitRate = '';
-      
-      for (let j = profitIndex + 1; j < Math.min(profitIndex + 6, nextAmountIndex); j++) {
+      const suffixEnd = rateIndex > 0 ? rateIndex : Math.min(amountIndex + 6, windowEnd);
+      for (let j = amountIndex + 1; j < suffixEnd; j++) {
         const line = lines[j];
-        
-        // 跳过昨日收益（小金额，通常是0.00）
-        if (/^[\d,]+\.\d{2}$/.test(line) && parseFloat(line.replace(/,/g, '')) < 100) {
-          console.log(`  第${j+1}行: 跳过昨日收益 - ${line}`);
-          continue;
-        }
-        
-        // 收益率
-        if (/^[+\-][\d.]+%$/.test(line)) {
-          profitRate = line;
-          console.log(`  第${j+1}行: 找到收益率 = ${profitRate}`);
-          break; // 找到收益率就结束
-        }
-        
-        // 份额类别（单独的A/B/C字母）
+        // 跳过数值和百分比
+        if (/^[+\-]?[\d,]+\.\d{2}$/.test(line)) continue;
+        if (/^[+\-]?[\d.]+%$/.test(line)) continue;
+        // 份额类别（单独的 A/B/C 字母）
         if (/^[ABC]$/.test(line)) {
-          nameSuffix = line;
-          console.log(`  第${j+1}行: 找到份额类别 = ${nameSuffix}`);
+          nameSuffix += line;
+          console.log(`  第${j+1}行: 找到份额类别 = ${line}`);
           continue;
         }
-        
-        // 名称后缀（在收益率之前的有效文本，但不是单个字母）
-        if (!profitRate && isValidNamePart(line) && line.length > 1) {
-          nameSuffix = line;
-          console.log(`  第${j+1}行: 找到名称后缀 = ${nameSuffix}`);
+        // 名称后缀（有效文本）
+        if (isValidNamePart(line)) {
+          nameSuffix += line;
+          console.log(`  第${j+1}行: 找到名称后缀 = ${line}`);
         }
       }
       
-      // 第三步：向前查找名称前缀
+      // 第四步：向前查找名称前缀
       let namePrefix = '';
       let searchStart = i > 0 ? amountLines[i - 1] + 1 : 0;
       
@@ -524,7 +609,7 @@ Page({
         }
       }
       
-      // 第四步：组合完整的基金名称
+      // 第五步：组合完整的基金名称
       const fundName = namePrefix + nameSuffix;
       console.log(`  组合后的完整名称: ${fundName}`);
       
@@ -803,11 +888,19 @@ Page({
     for (const item of importList) {
       try {
         console.log('正在导入基金:', item.code, item.name);
-        
+
+        // 跳过解析噪声：金额≤0 的条目（如把"0.00"昨日收益误当成持有金额的假识别）
+        const itemAmount = Number(item.amount) || 0;
+        const itemShares = Number(item.shares) || 0;
+        if (itemAmount <= 0 && itemShares <= 0) {
+          console.warn('跳过无效条目（金额为0）:', item.code, item.name);
+          continue;
+        }
+
         // 简单处理：如果是代码直接用，如果是名称则搜索
         let fundCode = item.code;
         let fundName = item.name;
-        
+
         // 搜索并验证基金
         const searchResults = await searchFund(item.code);
         if (searchResults && searchResults.length > 0) {
@@ -824,21 +917,44 @@ Page({
         const netValue = Number(fundInfo.netValue) || Number(fundInfo.estimatedValue) || 1;
         const amount = item.amount || 0;
         const profit = item.profit || 0;
-        const shares = amount / netValue;
-        const cost = shares > 0 ? (amount - profit) / shares : 0;
+        const pendingAdd = item.pendingAdd || 0;
+        const today = todayStr();
+
+        // 已确认部分按当前净值锚定份额/成本；加仓部分挂待确认 lot，确认前不计收益。
+        let shares = 0;
+        let cost = 0;
+        let importNetValue = 0;
+        const pendingAdds: { amount: number; date: string }[] = [];
+
+        if (pendingAdd > 0) {
+          // 只有显式填了加仓金额，才拆出待确认部分：已确认 = 总额 − 加仓
+          const confirmedAmount = amount - pendingAdd;
+          pendingAdds.push({ amount: pendingAdd, date: today });
+          if (confirmedAmount > 0 && netValue > 0) {
+            shares = confirmedAmount / netValue;
+            cost = (confirmedAmount - profit) / shares;
+            importNetValue = netValue;
+          }
+        } else if (netValue > 0) {
+          // 普通导入：整笔按当前净值锚定为已确认持仓（不再靠"收益=0"猜测待确认）
+          shares = amount / netValue;
+          cost = (amount - profit) / shares;
+          importNetValue = netValue;
+        }
 
         importedHoldings.push({
           code: fundCode,
           name: fundName,
-          amount,
-          profit,
-          profitRate: (amount > 0 ? (profit / amount) : 0) * 100,
           importTime: Date.now(),
           shares,
-          importNetValue: netValue,
-          cost
+          cost,
+          importNetValue,
+          pendingAdds,
+          amount,
+          profit,
+          profitRate: (amount > 0 ? (profit / amount) : 0) * 100
         });
-        
+
         addOptionalFund(fundCode, fundName);
         successCount++;
       } catch (e) {
@@ -859,6 +975,119 @@ Page({
     }, 1500);
   },
 
+
+  // 从交易记录文本全自动导入：解析每笔买卖 → 按基金分组 → 查历史净值折份额 → 拆分已确认/待确认
+  async importTransactions() {
+    const text = this.data.txnText;
+    if (!text || !text.trim()) {
+      wx.showToast({ title: '请先粘贴或识别交易记录', icon: 'none' });
+      return;
+    }
+
+    const records = parseTransactionRecords(text);
+    if (records.length === 0) {
+      wx.showModal({
+        title: '未识别到交易记录',
+        content: '请确认文本包含：买入/卖出、基金名称、金额、日期。\n例如：\n买入 基金|华夏国证半导体芯片ETF联接C 1,000.00元\n2026-06-24 14:56:28 交易进行中',
+        showCancel: false
+      });
+      return;
+    }
+
+    this.setData({ importing: true });
+    wx.showLoading({ title: '处理交易记录...' });
+
+    // 先按名称分组（减少搜索次数）
+    const byName = new Map<string, TxRecord[]>();
+    for (const r of records) {
+      const arr = byName.get(r.name) || [];
+      arr.push(r);
+      byName.set(r.name, arr);
+    }
+
+    // 解析每个名称的基金代码，再按"代码"归并：
+    // OCR 常把同一只基金的不同行识别成略有差异的名字（多空格等），
+    // 若按名字分组会拆成多条、最终按 code 覆盖丢数据。统一按 code 合并所有交易。
+    const byCode = new Map<string, { code: string; name: string; recs: TxRecord[] }>();
+    let skipCount = 0;
+    for (const [name, recs] of byName) {
+      try {
+        const searchResults = await searchFund(name);
+        if (!searchResults || searchResults.length === 0) {
+          console.warn('交易记录无法匹配基金:', name);
+          skipCount++;
+          continue;
+        }
+        const code = searchResults[0].code;
+        const existing = byCode.get(code);
+        if (existing) {
+          existing.recs.push(...recs);
+        } else {
+          byCode.set(code, { code, name: searchResults[0].name, recs: [...recs] });
+        }
+      } catch (e) {
+        console.error('交易记录匹配失败:', name, e);
+        skipCount++;
+      }
+    }
+
+    const importedHoldings: ImportedHolding[] = [];
+    let successCount = 0;
+
+    for (const { code: fundCode, name: fundName, recs } of byCode.values()) {
+      try {
+        // 当前已确认净值/日期：最新一笔确认买入通常就在这天，可免查历史净值接口
+        const est = await getFundEstimate(fundCode);
+        const curNav = Number(est.netValue) || 0;
+        const curDate = est.valuationDate || '';
+        const navByDate: Record<string, number> = {};
+        if (curDate && curNav > 0) navByDate[curDate] = curNav;
+
+        // 其余"已确认买入/卖出"申请日再查历史净值（进行中的不查，直接挂待确认）
+        const datesToFetch = Array.from(
+          new Set(recs.filter(r => r.status === 'confirmed').map(r => r.date))
+        ).filter(date => navByDate[date] === undefined);
+        await Promise.all(datesToFetch.map(async (date) => {
+          navByDate[date] = await getNetValueByDate(fundCode, date);
+        }));
+
+        const holding = buildHoldingFromTxns(fundCode, fundName, recs, navByDate, Date.now(), curNav);
+
+        // 已确认份额和待确认都为空 → 这只其实没有有效持仓（全是关闭/无净值），跳过
+        if (!(holding.shares && holding.shares > 0) && (holding.pendingAdds || []).length === 0) {
+          skipCount++;
+          continue;
+        }
+
+        importedHoldings.push(holding);
+        addOptionalFund(fundCode, fundName);
+        successCount++;
+      } catch (e) {
+        console.error('交易记录导入失败:', fundCode, e);
+        skipCount++;
+      }
+    }
+
+    if (importedHoldings.length > 0) {
+      saveImportedHoldings(importedHoldings);
+    }
+
+    wx.hideLoading();
+    this.setData({ importing: false, txnText: '' });
+
+    if (successCount > 0) {
+      wx.showToast({ title: `成功导入${successCount}个基金`, icon: 'success' });
+      setTimeout(() => {
+        wx.switchTab({ url: '/pages/holding/holding' });
+      }, 1500);
+    } else {
+      wx.showModal({
+        title: '导入失败',
+        content: `未能识别有效持仓${skipCount > 0 ? `（跳过 ${skipCount} 条）` : ''}。请检查交易记录文本是否完整。`,
+        showCancel: false
+      });
+    }
+  },
 
   // 删除某一项
   removeItem(e: any) {

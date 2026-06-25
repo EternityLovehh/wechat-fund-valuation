@@ -60,27 +60,40 @@ module.exports = {
     <scroll-view scroll-y class="list-body">
       <view wx:for="{{holdings}}" wx:key="code" class="list-item" bindtap="goToDetail" data-code="{{item.code}}">
         <view class="item-name">
-          <view class="fund-name">{{item.name}}</view>
+          <view class="fund-name">
+            {{item.name}}
+            <text wx:if="{{item.pendingAmount > 0 && !item.shares}}" class="pending-tag">待确认</text>
+            <text wx:elif="{{item.pendingAmount > 0}}" class="pending-tag">加仓确认中</text>
+          </view>
           <view class="fund-code">
             {{item.code}}
             <text class="fund-ratio">{{utils.toFixed(item.holdingRatio, 2)}}%</text>
           </view>
         </view>
-        
+
         <view class="item-amount">
           ¥{{utils.toFixed(item.currentAmount || item.amount, 2)}}
+          <view wx:if="{{item.pendingAmount > 0 && item.shares}}" class="amount-pending">
+            含确认中 ¥{{utils.toFixed(item.pendingAmount, 2)}}
+          </view>
         </view>
-        
+
         <view class="item-profit">
-          <view class="profit-rate {{item.dayGrowth >= 0 ? 'positive' : 'negative'}}">
-            <block wx:if="{{item.dayGrowth !== 0}}">
-              {{item.dayGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.dayGrowth, 2)}}%
-            </block>
-            <block wx:else>-</block>
-          </view>
-          <view class="profit-amount {{item.todayProfit >= 0 ? 'positive' : 'negative'}}">
-            {{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}
-          </view>
+          <block wx:if="{{item.pendingAmount > 0 && !item.shares}}">
+            <view class="profit-rate pending-text">买入确认中</view>
+            <view class="profit-amount pending-text">--</view>
+          </block>
+          <block wx:else>
+            <view class="profit-rate {{item.dayGrowth >= 0 ? 'positive' : 'negative'}}">
+              <block wx:if="{{item.dayGrowth !== 0}}">
+                {{item.dayGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.dayGrowth, 2)}}%
+              </block>
+              <block wx:else>-</block>
+            </view>
+            <view class="profit-amount {{item.todayProfit >= 0 ? 'positive' : 'negative'}}">
+              {{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}
+            </view>
+          </block>
         </view>
       </view>
     </scroll-view>

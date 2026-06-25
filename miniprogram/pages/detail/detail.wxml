@@ -22,9 +22,12 @@ module.exports = {
       <view class="fund-name">{{fund.name}}</view>
       <view class="fund-code-row">
         <text class="fund-code">{{fund.code}}</text>
-        <!-- 份额类别切换按钮（仅从持仓页进入且有持仓时显示） -->
+        <!-- 份额类别切换 / 删除持仓（仅从持仓页进入且有持仓时显示） -->
         <view wx:if="{{from === 'holding' && holding}}" class="switch-share-class" bindtap="showShareClassSelector">
           切换份额类别
+        </view>
+        <view wx:if="{{from === 'holding' && holding}}" class="delete-holding-pill" bindtap="deleteHolding">
+          删除持仓
         </view>
       </view>
     </view>
@@ -159,11 +162,6 @@ module.exports = {
       </view>
     </view>
 
-    <!-- 删除按钮（仅从持仓页进入且有持仓时显示） -->
-    <view wx:if="{{from === 'holding' && holding}}" class="delete-section">
-      <button class="delete-holding-btn" bindtap="deleteHolding">删除持仓</button>
-    </view>
-    
     <view style="height: 40rpx;"></view>
   </scroll-view>
 

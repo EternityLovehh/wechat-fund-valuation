@@ -1,6 +1,13 @@
 // detail.ts - 基金详情页面
 import { getFundEstimate, FundInfo, getFundHoldings, getFundIndustry, getFundYearGrowth, getBatchStockQuotes } from '../../utils/fundApi'
-import { getHoldingFunds, removeHolding, getImportedHoldings } from '../../utils/storage'
+import { getHoldingFunds, removeHolding, getImportedHoldings, saveImportedHolding, removeImportedHolding, addOptionalFund } from '../../utils/storage'
+import { normalizeHolding } from '../../utils/holdingCalc'
+import { getTodayStr } from '../../utils/appDate'
+
+// 当前日期 YYYY-MM-DD（走统一开关，便于调试时整体覆盖）
+function todayStr(): string {
+  return getTodayStr();
+}
 
 Page({
   data: {
@@ -69,10 +76,17 @@ Page({
         
         if (importedHolding) {
           // 将导入的持仓转换为标准格式
-          // 从导入数据反推份额和成本
-          const estimatedShares = importedHolding.amount / fund.estimatedValue;
-          const estimatedCost = importedHolding.amount / (1 + importedHolding.profitRate / 100) / estimatedShares;
-          
+          // 优先用导入时锚定的份额/成本；缺失时（旧数据）再从快照金额反推
+          const valuation = Number(fund.estimatedValue) || Number(fund.netValue) || 0;
+          const snapshotAmount = Number(importedHolding.amount) || 0;
+          const snapshotRate = Number(importedHolding.profitRate) || 0;
+          const estimatedShares = (Number(importedHolding.shares) > 0)
+            ? Number(importedHolding.shares)
+            : (valuation > 0 ? snapshotAmount / valuation : 0);
+          const estimatedCost = (Number(importedHolding.cost) > 0)
+            ? Number(importedHolding.cost)
+            : (estimatedShares > 0 ? (snapshotAmount / (1 + snapshotRate / 100)) / estimatedShares : 0);
+
           holding = {
             code: importedHolding.code,
             name: importedHolding.name,
@@ -304,8 +318,8 @@ Page({
   },
 
   confirmTrade() {
-    const { code, tradeType, tradeAmount } = this.data;
-    
+    const { code, tradeType, tradeAmount, fund } = this.data;
+
     if (!tradeAmount) {
       wx.showToast({ title: '请输入金额', icon: 'none' });
       return;
@@ -318,62 +332,65 @@ Page({
       return;
     }
 
-    // 导入存储函数
-    const { getImportedHoldings, saveImportedHoldings } = require('../../utils/storage');
-    
-    // 查找当前持仓
     const importedHoldings = getImportedHoldings();
-    const currentHolding = importedHoldings.find((h: any) => h.code === code);
-
-    if (!currentHolding) {
-      wx.showToast({ title: '仅支持导入的持仓交易', icon: 'none' });
-      return;
-    }
-
-    if (tradeType === 'sell' && amount > currentHolding.amount) {
-      wx.showToast({ title: '卖出金额不能超过持有金额', icon: 'none' });
-      return;
-    }
+    const raw = importedHoldings.find((h) => h.code === code);
+    const today = todayStr();
 
     try {
-      // 更新持仓金额
-      let newAmount = currentHolding.amount;
-      let newProfit = currentHolding.profit;
-      
       if (tradeType === 'buy') {
-        // 买入：增加持有金额
-        newAmount += amount;
-        // 收益保持不变（新买入的部分收益为0）
+        // 买入 = 新增一笔"当日待确认加仓"，确认前不计收益，确认后按当日净值并入
+        if (raw) {
+          const h = normalizeHolding(raw);
+          const pendingAdds = [...(h.pendingAdds || []), { amount, date: today }];
+          saveImportedHolding({ ...h, pendingAdds });
+        } else {
+          // 该基金尚无持仓：新建一只全仓待确认的持仓
+          saveImportedHolding({
+            code,
+            name: fund ? fund.name : code,
+            importTime: Date.now(),
+            shares: 0,
+            cost: 0,
+            importNetValue: 0,
+            pendingAdds: [{ amount, date: today }],
+            amount,
+            profit: 0,
+            profitRate: 0
+          });
+          addOptionalFund(code, fund ? fund.name : code);
+        }
+        wx.showToast({ title: '买入成功（确认中）', icon: 'success' });
       } else {
-        // 卖出：减少持有金额
-        const sellRatio = amount / currentHolding.amount;
-        newAmount -= amount;
-        newProfit -= currentHolding.profit * sellRatio; // 按比例减少收益
+        // 卖出 = 扣减已确认份额（确认中的部分尚未持有，不能卖）
+        if (!raw) {
+          wx.showToast({ title: '暂无持仓', icon: 'none' });
+          return;
+        }
+        const h = normalizeHolding(raw);
+        const netValue = Number(fund && fund.netValue) || Number(fund && fund.estimatedValue) || 0;
+        const shares = Number(h.shares) || 0;
+        const confirmedValue = shares * netValue;
+
+        if (netValue <= 0 || shares <= 0) {
+          wx.showToast({ title: '暂无可卖出的已确认份额', icon: 'none' });
+          return;
+        }
+        if (amount > confirmedValue + 0.01) {
+          wx.showToast({ title: '卖出金额不能超过已确认持有金额', icon: 'none' });
+          return;
+        }
+
+        const sellShares = Math.min(shares, amount / netValue);
+        const newShares = shares - sellShares;
+        // 成本单价不变；清仓且无待确认加仓时直接移除
+        if (newShares <= 0.000001 && (h.pendingAdds || []).length === 0) {
+          removeImportedHolding(code);
+        } else {
+          saveImportedHolding({ ...h, shares: newShares });
+        }
+        wx.showToast({ title: '卖出成功', icon: 'success' });
       }
 
-      // 重新计算收益率
-      const costAmount = newAmount - newProfit;
-      const newProfitRate = costAmount > 0 ? (newProfit / costAmount) * 100 : 0;
-
-      // 更新持仓
-      const updatedHolding = {
-        ...currentHolding,
-        amount: newAmount,
-        profit: newProfit,
-        profitRate: newProfitRate
-      };
-
-      const updatedHoldings = importedHoldings.map((h: any) => 
-        h.code === code ? updatedHolding : h
-      );
-
-      saveImportedHoldings(updatedHoldings);
-
-      wx.showToast({ 
-        title: tradeType === 'buy' ? '买入成功' : '卖出成功', 
-        icon: 'success' 
-      });
-      
       this.setData({ showTradeModal: false });
       this.loadFundDetail();
     } catch (e) {

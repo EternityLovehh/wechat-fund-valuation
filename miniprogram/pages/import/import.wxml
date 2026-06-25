@@ -6,19 +6,91 @@
   </view>
 
   <view class="tabs">
-    <view 
-      class="tab {{activeTab === 'batch' ? 'active' : ''}}" 
-      bindtap="switchTab" 
+    <view
+      class="tab {{activeTab === 'txn' ? 'active' : ''}}"
+      bindtap="switchTab"
+      data-tab="txn"
+    >
+      交易记录
+    </view>
+    <view
+      class="tab {{activeTab === 'batch' ? 'active' : ''}}"
+      bindtap="switchTab"
       data-tab="batch"
     >
       手动输入
     </view>
-    <view 
-      class="tab {{activeTab === 'ocr' ? 'active' : ''}}" 
-      bindtap="switchTab" 
+    <view
+      class="tab {{activeTab === 'ocr' ? 'active' : ''}}"
+      bindtap="switchTab"
       data-tab="ocr"
     >
       拍照识别
+    </view>
+  </view>
+
+  <!-- 交易记录（全自动拆分加仓/确认中） -->
+  <view wx:if="{{activeTab === 'txn'}}" class="txn-import">
+    <view class="tips">
+      <text class="tips-title">🧾 交易记录导入（推荐）</text>
+      <text class="tips-text">支付宝「持有 → 交易记录」截图或复制文本，自动按每笔买入拆分已确认 / 确认中，最准</text>
+    </view>
+
+    <view class="upload-area">
+      <button class="upload-btn album" bindtap="chooseImage">
+        <text class="icon">📸</text>
+        <text class="text">选择交易记录截图</text>
+      </button>
+    </view>
+
+    <view wx:if="{{ocrImages.length > 0}}" class="image-preview">
+      <view class="images-grid">
+        <view wx:for="{{ocrImages}}" wx:key="index" class="image-item">
+          <image src="{{item}}" mode="aspectFill" class="preview-image-small" />
+          <view class="remove-icon" bindtap="removeImage" data-index="{{index}}">×</view>
+        </view>
+      </view>
+      <view class="image-count">已选择 {{ocrImages.length}} 张图片</view>
+      <button class="reselect-btn" bindtap="reselectImage">重新选择</button>
+      <button
+        class="ocr-btn"
+        bindtap="recognizeImage"
+        loading="{{recognizing}}"
+        disabled="{{recognizing}}"
+      >
+        {{recognizing ? '识别中...' : '开始识别'}}
+      </button>
+    </view>
+
+    <view class="ocr-result">
+      <view class="result-header">
+        <text class="result-title">交易记录文本</text>
+        <text class="result-action" bindtap="pasteTxnFromClipboard">粘贴</text>
+      </view>
+      <textarea
+        class="result-textarea"
+        placeholder="可直接粘贴交易记录，或上方识别后自动填入。每笔含：买入/卖出、基金名、金额、日期、状态"
+        value="{{txnText}}"
+        bindinput="onTxnInput"
+        maxlength="-1"
+      />
+      <button
+        class="import-btn"
+        bindtap="importTransactions"
+        loading="{{importing}}"
+        disabled="{{importing}}"
+      >
+        {{importing ? '导入中...' : '解析并导入'}}
+      </button>
+    </view>
+
+    <view class="guide">
+      <view class="guide-title">💡 为什么用交易记录？</view>
+      <view class="guide-tips">
+        <text class="tips-item">📌 自动区分"已确认老仓"和"今日加仓确认中"</text>
+        <text class="tips-item">📌 按真实买入日净值折算份额，收益最准</text>
+        <text class="tips-item">📌 加仓部分确认前不计收益，确认后自动并入</text>
+      </view>
     </view>
   </view>
 
@@ -53,14 +125,26 @@
         </view>
         <view class="input-group flex-1 margin-left">
           <view class="input-label">持有收益 (元)</view>
-          <input 
-            class="form-input" 
+          <input
+            class="form-input"
             type="text"
-            placeholder="累计盈亏" 
-            value="{{inputProfit}}" 
+            placeholder="累计盈亏"
+            value="{{inputProfit}}"
             bindinput="onProfitInput"
           />
         </view>
+      </view>
+
+      <view class="input-group">
+        <view class="input-label">今日加仓金额 (元，可选)</view>
+        <input
+          class="form-input"
+          type="digit"
+          placeholder="今天刚加仓、还在确认中的金额，没有就留空"
+          value="{{inputPendingAdd}}"
+          bindinput="onPendingAddInput"
+        />
+        <view class="field-hint">加仓部分确认前不计收益，确认后自动并入</view>
       </view>
 
       <button class="add-to-list-btn" bindtap="addToList">添加到待导入列表</button>
@@ -77,7 +161,8 @@
           <view class="item-info">
             <view class="item-code">{{item.code}}</view>
             <view class="item-detail">
-              份额: {{item.shares}} | 成本: ¥{{item.cost.toFixed(4)}}
+              <block wx:if="{{item.amount}}">金额: ¥{{item.amount}}<text wx:if="{{item.profit !== undefined}}"> · 收益 ¥{{item.profit}}</text><text wx:if="{{item.pendingAdd > 0}}"> · 加仓 ¥{{item.pendingAdd}}</text></block>
+              <block wx:else>份额: {{item.shares}} · 成本 ¥{{item.cost}}</block>
             </view>
           </view>
           <view class="item-action" bindtap="removeItem" data-index="{{index}}">
@@ -155,7 +240,8 @@
           <view class="item-info">
             <view class="item-code">{{item.code}}</view>
             <view class="item-detail">
-              份额: {{item.shares}} | 成本: ¥{{item.cost.toFixed(4)}}
+              <block wx:if="{{item.amount}}">金额: ¥{{item.amount}}<text wx:if="{{item.profit !== undefined}}"> · 收益 ¥{{item.profit}}</text><text wx:if="{{item.pendingAdd > 0}}"> · 加仓 ¥{{item.pendingAdd}}</text></block>
+              <block wx:else>份额: {{item.shares}} · 成本 ¥{{item.cost}}</block>
             </view>
           </view>
           <view class="item-action" bindtap="removeItem" data-index="{{index}}">

@@ -80,6 +80,12 @@ page {
   margin-bottom: 12rpx;
 }
 
+.field-hint {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #b26a00;
+}
+
 .form-input {
   background: #f8f9fa;
   height: 80rpx;

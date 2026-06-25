@@ -264,7 +264,11 @@ export async function searchFund(keyword: string): Promise<FundInfo[]> {
           console.log('清理后关键词:', keywordCleaned);
           console.log('份额类别:', shareClass || '无');
 
-          type Scored = { item: any[]; score: number; sim: number };
+          // 场内 ETF：名字带「ETF」且不带「联接」（ETF联接是场外可申购的，保留）。
+          // 这类基金需在交易所买卖，不在本 App 的场外申购范围内，排序时排到场外基金之后。
+          const isOnExchangeETF = (name: string) => /ETF/i.test(name) && !name.includes('联接');
+
+          type Scored = { item: any[]; score: number; sim: number; etf: boolean };
           const scored: Scored[] = [];
 
           for (const item of fundList) {
@@ -274,38 +278,54 @@ export async function searchFund(keyword: string): Promise<FundInfo[]> {
 
             // 1. 精确匹配（代码或完整名称）
             if (code === keyword || name === keyword) {
-              scored.push({ item, score: 999, sim: 1 });
+              scored.push({ item, score: 999, sim: 1, etf: isOnExchangeETF(name) });
               continue;
             }
             // 2. 拼音整体一致
             if (pinyin && pinyin.toLowerCase() === keyword.toLowerCase()) {
-              scored.push({ item, score: 950, sim: 1 });
+              scored.push({ item, score: 950, sim: 1, etf: isOnExchangeETF(name) });
               continue;
             }
 
-            // 3. 公司前缀硬约束（前 2 字一致）
-            if (kwCompany2 && !name.startsWith(kwCompany2)) continue;
-
-            // 4. 份额类别硬约束（keyword 有 share，name 也有，必须一致）
+            // 3. 份额类别硬约束（keyword 有 share，name 也有，必须一致）
             const nameShareClass = extractShareClass(name);
             if (shareClass && nameShareClass && shareClass !== nameShareClass) continue;
 
-            // 5. token 相似度
             const nameCleaned = strongClean(name);
+
+            // 4. 直接包含关键词 —— 主题/关键字搜索（如「白酒」「半导体」「医疗」）的主路径，
+            //    这类词不是公司名，名称不会以它开头，必须靠子串包含命中。
+            //    只用原始关键词判断，避免「华夏成长混合」被清洗成「华夏」后误配所有华夏系基金。
+            const contains = name.includes(keyword);
+
+            // 5. token 相似度（用于非完全包含的模糊匹配，如营销名 vs 官方简称、带份额后缀的「白酒A」）
             const nameTokens = toTokenSet(nameCleaned);
             const sim = jaccard(keywordTokens, nameTokens);
-            if (sim < 0.4) continue;
+
+            // 命中条件：直接包含 或 token 相似度达标
+            if (!contains && sim < 0.4) continue;
 
             let score = sim * 100;
+            // 公司前缀一致：仅作为加分项，不再硬过滤（否则「白酒」等主题词会把所有基金排除）
+            if (kwCompany2 && name.startsWith(kwCompany2)) score += 5;
             if (kwCompany3 && name.startsWith(kwCompany3)) score += 5;
             if (nameCleaned && (nameCleaned.includes(keywordCleaned) || keywordCleaned.includes(nameCleaned))) score += 10;
             if (shareClass && shareClass === nameShareClass) score += 5;
-            if (name.includes(keyword)) score += 20;
+            // 未指定份额类别时，默认偏向 C 类（场外短期持有最常用）
+            if (!shareClass && nameShareClass === 'C') score += 8;
+            if (contains) score += 30;
 
-            scored.push({ item, score, sim });
+            scored.push({ item, score, sim, etf: isOnExchangeETF(name) });
           }
 
-          scored.sort((a, b) => b.score - a.score);
+          // 场外基金一律排在场内 ETF 前面；同组内再按相关度得分排序。
+          // 精确匹配（代码/全名一致，score≥900）例外：即便是 ETF 也应优先返回。
+          scored.sort((a, b) => {
+            const aExact = a.score >= 900, bExact = b.score >= 900;
+            if (aExact !== bExact) return aExact ? -1 : 1;
+            if (!aExact && a.etf !== b.etf) return a.etf ? 1 : -1;
+            return b.score - a.score;
+          });
           const matchedFunds = scored.slice(0, 10).map(s => s.item);
           
           // 尝试获取每个基金的详细信息
@@ -377,6 +397,44 @@ export async function getFundDetail(code: string): Promise<any> {
       },
       fail: (err) => {
         reject(err);
+      }
+    });
+  });
+}
+
+// 获取某只基金在指定日期的已确认单位净值（用于按申购申请日折算份额）。
+// 查不到（非交易日 / 净值未发布 / 接口失败）一律返回 0，调用方据此判定"尚未确认"。
+export async function getNetValueByDate(code: string, date: string): Promise<number> {
+  if (!code || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return 0;
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://api.fund.eastmoney.com/f10/lsjz',
+      method: 'GET',
+      header: { 'Referer': 'https://fundf10.eastmoney.com/' },
+      data: {
+        fundCode: code,
+        pageIndex: 1,
+        pageSize: 10,
+        startDate: date,
+        endDate: date,
+        _: Date.now()
+      },
+      success: (res: any) => {
+        try {
+          let data = res.data;
+          if (typeof data === 'string') data = JSON.parse(data);
+          const list: any[] = (data && data.Data && data.Data.LSJZList) || [];
+          const hit = list.find((x) => x.FSRQ === date) || list[0];
+          const nav = hit ? parseFloat(hit.DWJZ) : 0;
+          resolve(isNaN(nav) ? 0 : nav);
+        } catch (e) {
+          console.warn('解析历史净值失败:', code, date, e);
+          resolve(0);
+        }
+      },
+      fail: (err) => {
+        console.warn('查询历史净值失败:', code, date, err);
+        resolve(0);
       }
     });
   });
