@@ -1,5 +1,5 @@
 // index.ts - 自选基金页面
-import { getFundEstimate, FundInfo, getFundYearGrowth, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getFundYearGrowth, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getOptionalFunds, removeOptionalFund, getHoldingFunds, getImportedHoldings } from '../../utils/storage'
 
 interface FundDisplay extends FundInfo {
@@ -25,6 +25,7 @@ Page({
   },
 
   autoRefreshTimer: null as number | null,
+  loadSeq: 0, // loadFunds 并发守卫序号
 
   onLoad() {
     this.loadFunds();
@@ -72,6 +73,8 @@ Page({
 
   // 加载自选基金
   async loadFunds() {
+    // 并发守卫：onShow / 30s 自动刷新 / 下拉刷新可能重叠，只让最新一次结果落地
+    const seq = ++this.loadSeq;
     this.setData({ loading: true });
     const optionalFunds = getOptionalFunds();
     const manualHoldings = getHoldingFunds();
@@ -83,80 +86,74 @@ Page({
     }
 
     try {
-      // 使用 Promise.allSettled 而不是 Promise.all，避免单个失败导致全部失败
-      const results = await Promise.allSettled(
-        optionalFunds.map(async (f) => {
-          // 跳过 NAME_ 开头的临时代码
-          if (f.code.startsWith('NAME_')) {
-            console.log('跳过临时代码:', f.code);
-            throw new Error('临时代码');
-          }
-          // 只获取标准6位数字代码的基金
-          if (!/^\d{6}$/.test(f.code)) {
-            console.log('跳过非标准代码:', f.code);
-            throw new Error('非标准代码');
-          }
-          
-          // 获取基金估值
-          const fundInfo = await getFundEstimate(f.code);
-          
-          // 获取近一年涨幅（不阻塞主流程）
-          let yearGrowth = 0;
+      // 只取标准 6 位数字代码（自动排除 NAME_ 临时码/非标准码），一次批量拉取全部估值
+      const codes = optionalFunds.map(f => f.code).filter(code => /^\d{6}$/.test(code));
+      const estimates = await getBatchFundEstimate(codes);
+      const estMap = new Map(estimates.map(e => [e.code, e]));
+
+      // 近一年涨幅是独立接口、无法批量，对已拿到估值的基金并发拉取（失败不影响主流程）
+      const yearGrowthEntries = await Promise.all(
+        Array.from(estMap.keys()).map(async (code): Promise<[string, number]> => {
           try {
-            yearGrowth = await getFundYearGrowth(f.code);
+            return [code, await getFundYearGrowth(code)];
           } catch (e) {
-            console.log('获取近一年涨幅失败:', f.code);
+            console.log('获取近一年涨幅失败:', code);
+            return [code, 0];
           }
-
-          // 关联持仓信息
-          let holdingAmount = 0;
-          let holdingProfit = 0;
-          let todayProfit = 0;
-
-          // 1. 检查手动持仓
-          const manual = manualHoldings.find(h => h.code === f.code);
-          if (manual) {
-            const shares = manual.shares || 0;
-            const cost = manual.cost || 0;
-            const netValue = fundInfo.netValue || fundInfo.estimatedValue;
-            holdingAmount = shares * netValue;
-            holdingProfit = shares * netValue - shares * cost;
-            todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
-          }
-
-          // 2. 检查导入持仓 (累加，虽然通常代码唯一)
-          const imported = importedHoldings.find(h => h.code === f.code);
-          if (imported) {
-            const shares = imported.shares || 0;
-            const cost = imported.cost || 0;
-            const netValue = fundInfo.netValue || fundInfo.estimatedValue;
-            
-            if (shares > 0) {
-              holdingAmount = shares * netValue;
-              holdingProfit = cost > 0 ? (shares * netValue - shares * cost) : (imported.profit || 0);
-              todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
-            } else {
-              // 兜底使用快照
-              holdingAmount = imported.amount || 0;
-              holdingProfit = imported.profit || 0;
-            }
-          }
-          
-          return {
-            ...fundInfo,
-            yearGrowth,
-            holdingAmount,
-            holdingProfit,
-            todayProfit
-          } as FundDisplay;
         })
       );
-      
-      // 只保留成功的结果
-      const funds = results
-        .filter((r): r is PromiseFulfilledResult<FundDisplay> => r.status === 'fulfilled')
-        .map(r => r.value);
+      const yearGrowthMap = new Map(yearGrowthEntries);
 
+      // 按自选顺序组装；无估值数据的（临时码/接口未返回）直接跳过
+      const funds: FundDisplay[] = [];
+      for (const f of optionalFunds) {
+        const fundInfo = estMap.get(f.code);
+        if (!fundInfo) continue;
+
+        const yearGrowth = yearGrowthMap.get(f.code) || 0;
+
+        // 关联持仓信息
+        let holdingAmount = 0;
+        let holdingProfit = 0;
+        let todayProfit = 0;
+
+        // 1. 检查手动持仓
+        const manual = manualHoldings.find(h => h.code === f.code);
+        if (manual) {
+          const shares = manual.shares || 0;
+          const cost = manual.cost || 0;
+          const netValue = fundInfo.netValue || fundInfo.estimatedValue;
+          holdingAmount = shares * netValue;
+          holdingProfit = shares * netValue - shares * cost;
+          todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
+        }
+
+        // 2. 检查导入持仓 (累加，虽然通常代码唯一)
+        const imported = importedHoldings.find(h => h.code === f.code);
+        if (imported) {
+          const shares = imported.shares || 0;
+          const cost = imported.cost || 0;
+          const netValue = fundInfo.netValue || fundInfo.estimatedValue;
+
+          if (shares > 0) {
+            holdingAmount = shares * netValue;
+            holdingProfit = cost > 0 ? (shares * netValue - shares * cost) : (imported.profit || 0);
+            todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
+          } else {
+            // 兜底使用快照
+            holdingAmount = imported.amount || 0;
+            holdingProfit = imported.profit || 0;
+          }
+        }
+
+        funds.push({
+          ...fundInfo,
+          yearGrowth,
+          holdingAmount,
+          holdingProfit,
+          todayProfit
+        } as FundDisplay);
+      }
 
       console.log('成功加载基金数量:', funds.length, '/', optionalFunds.length);
 
@@ -176,6 +173,9 @@ Page({
         if (f.valuationDate && f.valuationDate > latestValuationDate) latestValuationDate = f.valuationDate;
       }
 
+      // 已有更新的一次加载在跑：丢弃本次（较旧）结果，避免覆盖闪烁
+      if (seq !== this.loadSeq) return;
+
       this.setData({
         funds,
         marketStatus: status,
@@ -185,10 +185,10 @@ Page({
         loading: false
       });
       
-      // 如果有失败的，提示用户
-      const failedCount = results.filter(r => r.status === 'rejected').length;
+      // 如果有未取到估值的，记录数量
+      const failedCount = codes.length - funds.length;
       if (failedCount > 0) {
-        console.log('加载失败数量:', failedCount);
+        console.log('未取到估值数量:', failedCount);
       }
     } catch (e) {
       console.error('加载自选失败:', e);

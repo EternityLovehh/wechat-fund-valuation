@@ -1,5 +1,5 @@
 // holding.ts - 持仓页面
-import { getFundEstimate, getNetValueByDate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getNetValueByDate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
 import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
@@ -13,6 +13,7 @@ interface HoldingDisplay extends HoldingFund {
   estimatedProfitRate: number;
   dayGrowth: number; // 今日涨幅
   todayProfit: number; // 今日收益
+  estimateSource?: FundInfo['estimateSource']; // 估值来源(official/navchg/computed/none)
 }
 
 // 导入的持仓显示（包含实时数据）
@@ -24,6 +25,7 @@ interface ImportedHoldingDisplay extends ImportedHolding {
   todayProfit?: number; // 今日收益
   estimatedShares?: number; // 估算份额
   pendingAmount?: number; // 待确认加仓金额合计（>0 时 UI 显示"加仓确认中"）
+  estimateSource?: FundInfo['estimateSource']; // 估值来源(official/navchg/computed/none)
 }
 
 // 统一的持仓显示类型
@@ -65,6 +67,7 @@ Page({
   },
 
   autoRefreshTimer: null as number | null,
+  loadSeq: 0, // loadHoldings 并发守卫序号
 
   onLoad() {
     this.loadHoldings();
@@ -110,6 +113,9 @@ Page({
   },
 
   async loadHoldings() {
+    // 并发守卫：onShow / 30s 自动刷新 / 下拉刷新可能重叠，只让最新一次的结果落地，
+    // 避免慢的那次（数据可能不全）最后 setData 覆盖掉好的结果导致估值闪烁/消失
+    const seq = ++this.loadSeq;
     // 仅首次（列表为空）显示"加载中"，后续刷新/onShow 原地更新，避免每次闪烁
     this.setData({ loading: this.data.holdings.length === 0 });
     const holdingFunds = getHoldingFunds(); // 手动输入的持仓
@@ -142,13 +148,25 @@ Page({
         }
       };
 
+      // 手动 + 导入持仓的全部基金代码，一次批量拉取估值，后续按代码查表
+      const allCodes = [
+        ...holdingFunds.map(h => h.code),
+        ...importedHoldings.map(h => h.code)
+      ];
+      const estimates = await getBatchFundEstimate(allCodes);
+      const estMap = new Map<string, FundInfo>(estimates.map(e => [e.code, e]));
+
       // ===== 手动持仓 =====
       // 持有金额 = 份额 × 当日已确认净值（dwjz），盘中估值跳动不反映在金额里，只在每日净值更新后才变。
       // 今日收益 = 份额 × (估值 − 已确认净值)，盘中实时显示。
       // 估算累计收益 = 份额 × 估值 − 成本（额外字段，UI 默认不展示）。
-      const manualResults = await Promise.all(
-        holdingFunds.map(async (h) => {
-          const fund = await getFundEstimate(h.code);
+      const manualResults = holdingFunds.map((h) => {
+          // 缺失估值（代码非标准/接口未返回）时用 0 值兜底，仍显示该行而非整页失败
+          const fund = estMap.get(h.code) || {
+            code: h.code, name: h.name, type: '',
+            netValue: 0, estimatedValue: 0, estimatedGrowth: 0, dayGrowth: 0,
+            updateTime: '', valuationDate: ''
+          } as FundInfo;
           recordSource(fund);
           const netValue = Number(fund.netValue) || 0;
           const estimatedValue = Number(fund.estimatedValue) || netValue;
@@ -183,10 +201,10 @@ Page({
             estimatedProfit,
             estimatedProfitRate,
             dayGrowth,
-            todayProfit
+            todayProfit,
+            estimateSource: fund.estimateSource
           };
-        })
-      );
+        });
 
       // ===== 导入持仓 =====
       // 数据结构：已确认份额/成本 + 待确认加仓 lot。每次加载时把已发布净值的加仓 lot 结算并入。
@@ -209,7 +227,8 @@ Page({
           }
 
           try {
-            const fund = await getFundEstimate(h.code);
+            const fund = estMap.get(h.code);
+            if (!fund) return fallback();
             recordSource(fund);
             const netValue = Number(fund.netValue) || 0;
             const estimatedValue = Number(fund.estimatedValue) || netValue;
@@ -276,7 +295,8 @@ Page({
               estimatedShares: shares,
               profit: calc.profit,
               profitRate: calc.profitRate,
-              totalCost: calc.totalCost
+              totalCost: calc.totalCost,
+              estimateSource: fund.estimateSource
             } as ImportedHoldingDisplay;
           } catch (e) {
             console.error('获取导入持仓估值失败:', h.code, e);
@@ -346,6 +366,9 @@ Page({
       const valuationDate = latestValuationDate
         ? latestValuationDate.slice(5) // YYYY-MM-DD → MM-DD
         : '';
+
+      // 已有更新的一次加载在跑：丢弃本次（较旧）结果，避免覆盖闪烁
+      if (seq !== this.loadSeq) return;
 
       this.setData({
         holdings: allHoldings,

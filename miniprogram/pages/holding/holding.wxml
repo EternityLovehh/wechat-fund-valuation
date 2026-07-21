@@ -89,6 +89,7 @@ module.exports = {
                 {{item.dayGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.dayGrowth, 2)}}%
               </block>
               <block wx:else>-</block>
+              <text class="est-tag" wx:if="{{item.estimateSource === 'computed'}}">自算</text>
             </view>
             <view class="profit-amount {{item.todayProfit >= 0 ? 'positive' : 'negative'}}">
               {{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}

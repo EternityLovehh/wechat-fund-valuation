@@ -9,6 +9,9 @@ export interface FundInfo {
   dayGrowth: number; // 与 estimatedGrowth 同源，保留兼容
   updateTime: string; // 估值时间（gztime，例如 "2026-05-09 15:00"），无数据时为空
   valuationDate?: string; // 净值日期（jzrq，例如 "2026-05-09"），无数据时为空
+  // 估值来源：official=官方实时估值 gsz；navchg=收盘后按已确认净值涨跌；
+  //          computed=前十大重仓自算（近似）；none=无估值（仅净值）
+  estimateSource?: 'official' | 'navchg' | 'computed' | 'none';
 }
 
 // 市场交易时段状态
@@ -69,8 +72,10 @@ export interface FundHoldingsDetail {
   totalStockRatio?: string; // 股票总占比
 }
 
-// 天天基金实时估值接口
-const FUND_ESTIMATE_API = 'https://fundgz.1234567.com.cn/js/';
+// 基金实时估值/净值接口
+// 原天天基金 JSONP 接口 https://fundgz.1234567.com.cn/js/{code}.js 已下线（永久 301 跳转到东方财富 notfound 页），
+// 改用东方财富手机端接口，返回标准 JSON：NAV(净值)/GSZ(实时估值)/GSZZL(估值涨跌)/GZTIME(估值时间)/PDATE(净值日期)。
+const FUND_ESTIMATE_API = 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo';
 
 // 热门基金列表（备用）
 const POPULAR_FUNDS = [
@@ -95,76 +100,439 @@ const POPULAR_FUNDS = [
   { code: '161028', name: '富国中证新能源汽车指数分级', keywords: ['新能源', '汽车', '富国', '车'] }
 ];
 
-// 获取基金实时估值数据
-export async function getFundEstimate(code: string): Promise<FundInfo> {
+// 把接口返回的单条记录映射成 FundInfo（单只/批量共用）
+// 解析逻辑借鉴开源项目 x2rr/funds（同样以 fundmobapi/FundMNFInfo 为实时估值源）：
+//   · 盘中（当日净值尚未公布，PDATE ≠ GZTIME 的日期）→ 用实时估值 GSZ / GSZZL
+//   · 收盘后（当日净值已公布，PDATE == GZTIME 的日期）→ 估值即已确认净值 NAV，涨跌用净值涨跌率 NAVCHGRT
+function mapFundDatum(d: any): FundInfo {
+  const netValue = parseFloat(d.NAV) || 0; // 当日已确认净值(dwjz)
+  const pdate = d.PDATE && d.PDATE !== '--' ? d.PDATE : ''; // 净值日期(jzrq)
+  const gztime = d.GZTIME || ''; // 估值时间，形如 "2026-07-21 15:00"
+  const navchgrt = parseFloat(d.NAVCHGRT); // 已确认净值涨跌率 %
+
+  let estimatedValue: number;
+  let estimatedGrowth: number;
+  let estimateSource: FundInfo['estimateSource'];
+
+  if (pdate && gztime && pdate === gztime.substr(0, 10)) {
+    // 当日净值已公布：盘中估值已失效，直接用净值 + 净值涨跌率
+    estimatedValue = netValue;
+    estimatedGrowth = isNaN(navchgrt) ? 0 : navchgrt;
+    estimateSource = 'navchg';
+  } else {
+    // 盘中：用官方实时估值 GSZ / GSZZL；缺失（已下线/未生成）时回落净值、涨跌 0，避免虚假盈亏
+    const gsz = parseFloat(d.GSZ);
+    const gszzl = parseFloat(d.GSZZL);
+    if (!isNaN(gsz)) {
+      estimatedValue = gsz;
+      estimatedGrowth = isNaN(gszzl) ? 0 : gszzl;
+      estimateSource = 'official';
+    } else {
+      estimatedValue = netValue;
+      estimatedGrowth = 0;
+      estimateSource = 'none'; // 待 getBatchFundEstimate 用重仓自算补上
+    }
+  }
+
+  return {
+    code: d.FCODE,
+    name: d.SHORTNAME || '',
+    type: getFundType(d.FCODE),
+    netValue,
+    estimatedValue,
+    estimatedGrowth,
+    dayGrowth: estimatedGrowth,
+    // 真实估值时间戳，缺失时返回空串（不回落到本地时间，避免显示与数据脱钩的假时间）
+    updateTime: gztime,
+    valuationDate: pdate,
+    estimateSource
+  };
+}
+
+// 底层请求：一次拉取 codes 的估值，返回原始记录数组（接口支持 Fcodes 逗号分隔批量）
+function requestFundEstimateRaw(codes: string[]): Promise<any[]> {
   return new Promise((resolve, reject) => {
     wx.request({
-      url: `${FUND_ESTIMATE_API}${code}.js`,
+      url: FUND_ESTIMATE_API,
       method: 'GET',
+      data: {
+        pageIndex: 1,
+        pageSize: codes.length,
+        plat: 'Android',
+        appType: 'ttjj',
+        product: 'EFund',
+        Version: 1,
+        deviceid: 'wx-miniprogram',
+        Fcodes: codes.join(','),
+        _: Date.now()
+      },
       success: (res: any) => {
         try {
-          console.log('基金估值API返回:', res.data);
-          
-          // 检查返回数据类型
-          if (typeof res.data !== 'string') {
-            console.error('返回数据不是字符串:', typeof res.data);
-            reject(new Error('数据格式错误：返回数据不是字符串'));
-            return;
+          // 该接口 Content-Type 为 application/json，wx.request 通常已自动解析成对象；
+          // 兜底再兼容字符串返回的情况。
+          let payload: any = res.data;
+          if (typeof payload === 'string') {
+            payload = JSON.parse(payload);
           }
-          
-          // 解析JSONP数据: jsonpgz({"fundcode":"110022",...})
-          const match = res.data.match(/jsonpgz\((.*)\)/);
-          if (!match || !match[1]) {
-            console.error('无法匹配JSONP格式，原始数据:', res.data.substring(0, 200));
-            reject(new Error('数据格式错误：无法解析JSONP格式'));
-            return;
-          }
-          
-          const jsonStr = match[1];
-          console.log('提取的JSON字符串:', jsonStr.substring(0, 200));
-          
-          const data = JSON.parse(jsonStr);
-          console.log('解析后的数据:', data);
-          
-          // 验证必要字段
-          if (!data.fundcode || !data.name) {
-            console.error('缺少必要字段:', data);
-            reject(new Error('数据格式错误：缺少必要字段'));
-            return;
-          }
-          
-          resolve({
-            code: data.fundcode,
-            name: data.name,
-            type: getFundType(data.fundcode),
-            netValue: parseFloat(data.dwjz) || 0, // 当日净值
-            estimatedValue: parseFloat(data.gsz) || 0, // 估算净值
-            estimatedGrowth: parseFloat(data.gszzl) || 0, // 估算涨跌百分比
-            dayGrowth: parseFloat(data.gszzl) || 0,
-            // 真实估值时间戳，缺失时返回空串（不再回落到本地时间，避免显示与数据脱钩的假时间）
-            updateTime: data.gztime || '',
-            // 净值日期，UI 上可与 updateTime 分开展示
-            valuationDate: data.jzrq || ''
-          });
+          const list = payload && payload.Datas;
+          resolve(Array.isArray(list) ? list : []);
         } catch (e) {
-          console.error('解析基金数据失败:', e);
+          console.error('解析基金估值数据失败:', e);
           reject(e);
         }
       },
       fail: (err) => {
-        console.error('请求基金数据失败:', err);
+        console.error('请求基金估值数据失败:', err);
         reject(err);
       }
     });
   });
 }
 
-// 批量获取基金估值
+// 云函数返回的记录 → FundInfo（云函数已判定 official/navchg/none）
+function mapCloudDatum(d: any): FundInfo {
+  const netValue = Number(d.netValue) || 0;
+  const estimatedValue = Number(d.estimatedValue) || netValue;
+  const estimatedGrowth = Number(d.estimatedGrowth) || 0;
+  return {
+    code: d.code,
+    name: d.name || '',
+    type: getFundType(d.code),
+    netValue,
+    estimatedValue,
+    estimatedGrowth,
+    dayGrowth: estimatedGrowth,
+    updateTime: d.updateTime || '',
+    valuationDate: d.valuationDate || '',
+    estimateSource: d.estimateSource || d.source || 'none'
+  };
+}
+
+// 经云函数取官方估值（GetFundGZList，最准）；返回 null 表示云函数不可用，由调用方回落直连。
+async function getBaseViaCloud(valid: string[]): Promise<FundInfo[] | null> {
+  if (typeof wx === 'undefined' || !wx.cloud || typeof wx.cloud.callFunction !== 'function') return null;
+  try {
+    const res: any = await wx.cloud.callFunction({ name: 'getFund', data: { codes: valid } });
+    const r = res && res.result;
+    if (r && r.success && Array.isArray(r.data)) {
+      return r.data.filter((d: any) => d && d.code).map(mapCloudDatum);
+    }
+  } catch (e) {
+    console.warn('[估值诊断] 云函数不可用，回落直连 fundmobapi:', e);
+  }
+  return null;
+}
+
+// 直连 fundmobapi（云函数不可用时的兜底：仅净值 + navchg 判定，官方 gsz 拿不到）
+async function getBaseViaDirect(valid: string[]): Promise<FundInfo[]> {
+  const CHUNK = 50;
+  const chunks: string[][] = [];
+  for (let i = 0; i < valid.length; i += CHUNK) chunks.push(valid.slice(i, i + CHUNK));
+  const settled = await Promise.allSettled(chunks.map((chunk) => requestFundEstimateRaw(chunk)));
+  const out: FundInfo[] = [];
+  for (const r of settled) {
+    if (r.status === 'fulfilled') {
+      for (const d of r.value) {
+        if (d && d.FCODE) out.push(mapFundDatum(d));
+      }
+    }
+  }
+  return out;
+}
+
+// 批量获取基金估值：
+//   1) 云函数优先 → 东财官方估值排行 GetFundGZList（含官方 gsz，最准；AkShare 同源）
+//   2) 云函数不可用 → 直连 fundmobapi（仅净值）
+//   3) 仍无官方估值(source==='none')的基金 → 前十大重仓自算兜底（全覆盖）
 export async function getBatchFundEstimate(codes: string[]): Promise<FundInfo[]> {
-  const results = await Promise.allSettled(codes.map(code => getFundEstimate(code)));
-  return results
-    .filter((r): r is PromiseFulfilledResult<FundInfo> => r.status === 'fulfilled')
-    .map(r => r.value);
+  const valid = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
+  if (valid.length === 0) return [];
+
+  const out: FundInfo[] = (await getBaseViaCloud(valid)) || (await getBaseViaDirect(valid));
+
+  // 官方无估值(source==='none')的基金，用前十大重仓自算补上。
+  // 不限时段：非交易时段个股为最近收盘价，算出的即"截至最近收盘的估值"，与旧 fundgz 行为一致。
+  const needCompute = out.filter((f) => f.estimateSource === 'none' && f.netValue > 0);
+  if (needCompute.length > 0) {
+    try {
+      const estMap = await computeEstimatesForFunds(
+        needCompute.map((f) => ({ code: f.code, netValue: f.netValue }))
+      );
+      for (const f of out) {
+        const e = estMap.get(f.code);
+        if (e) {
+          f.estimatedValue = e.estimatedValue;
+          f.estimatedGrowth = e.estimatedGrowth;
+          f.dayGrowth = e.estimatedGrowth;
+          f.estimateSource = 'computed';
+        }
+      }
+    } catch (e) {
+      console.warn('[估值诊断] 自算失败:', e);
+    }
+  }
+
+  return out;
+}
+
+// ===== 自算估值（官方 fundgz 实时估值 gsz 下线后的替代）=====
+// 社区通行做法：基金前十大重仓股(占净值比 JZBL) × 个股实时涨跌%，归一化到已披露仓位得到估算涨跌。
+// 注意：仅覆盖披露的前十大重仓（股票型基金约占净值 50-70%），是近似值，非官方精确估值。
+
+interface WeightedHolding {
+  code: string;
+  weight: number; // 占净值比 %
+}
+
+// 重仓/资产配置按季度披露，缓存 6 小时，避免每次刷新重复请求
+const holdingsCache = new Map<string, { ts: number; holdings: WeightedHolding[] }>();
+const stockRatioCache = new Map<string, { ts: number; ratio: number | null }>();
+const HOLDINGS_TTL = 6 * 60 * 60 * 1000;
+
+// 上次成功算出的估算涨跌：某轮重仓/行情取数失败时用它兜底，避免估值在刷新/返回时闪没
+const estimateCache = new Map<string, { ts: number; estimatedGrowth: number }>();
+
+// 取某基金的股票占净比(%)，用于把"前十大加权涨跌"按真实股票仓位摊分（现金/债券不随股价波动）。
+// 数据源：东财资产配置接口(轻量)，季度披露；取不到返回 null（调用方退回不摊分的旧口径）。
+function getFundStockRatio(code: string): Promise<number | null> {
+  const cached = stockRatioCache.get(code);
+  if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
+    return Promise.resolve(cached.ratio);
+  }
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNAssetAllocationNew',
+      method: 'GET',
+      data: { FCODE: code, deviceid: 'wx', plat: 'Android', product: 'EFund', version: '1', _: Date.now() },
+      success: (res: any) => {
+        try {
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const row = (p && p.Datas && p.Datas[0]) || null;
+          const gp = row ? parseFloat(row.GP) : NaN; // GP=股票占净比
+          const ratio = !isNaN(gp) && gp > 0 ? Math.min(gp, 100) : null;
+          stockRatioCache.set(code, { ts: Date.now(), ratio });
+          resolve(ratio);
+        } catch (e) {
+          resolve(null);
+        }
+      },
+      fail: () => resolve(null)
+    });
+  });
+}
+
+// 取某基金前十大重仓（代码 + 占净值比），带缓存
+function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
+  const cached = holdingsCache.get(code);
+  if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
+    return Promise.resolve(cached.holdings);
+  }
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition',
+      method: 'GET',
+      data: { FCODE: code, deviceid: 'wx', plat: 'WAP', product: 'EFund', version: '2.0.0', _: Date.now() },
+      success: (res: any) => {
+        try {
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const stocks = (p && p.Datas && p.Datas.fundStocks) || [];
+          const holdings: WeightedHolding[] = [];
+          for (const s of stocks.slice(0, 10)) {
+            const c = String(s.GPDM || '').trim();
+            const w = parseFloat(s.JZBL);
+            // 仅取 A 股 6 位代码（港股/美股 push2 行情口径不同，跳过并归一化到 A 股部分）
+            if (/^\d{6}$/.test(c) && !isNaN(w) && w > 0) holdings.push({ code: c, weight: w });
+          }
+          holdingsCache.set(code, { ts: Date.now(), holdings });
+          resolve(holdings);
+        } catch (e) {
+          resolve([]);
+        }
+      },
+      fail: () => resolve([])
+    });
+  });
+}
+
+// 个股行情缓存：20 秒内复用，避免快速刷新/从详情页返回时反复猛打 push2 导致限流。
+// 同时保留"上次成功值"：某轮 push2 失败(502/限流)时，用上次的值兜底，估值不会闪没。
+const stockChangeCache = new Map<string, { ts: number; chg: number }>();
+const STOCK_CHANGE_TTL = 20 * 1000;
+
+// 腾讯行情批量：qt.gtimg.cn 独立于东财，push2 502 时仍可用；只取涨跌%(数字)，GBK 编码不影响解析。
+// 与页面里大盘指数(loadMarketIndex)相同的解析方式，已验证可用。
+function fetchTencentChanges(codes: string[]): Promise<Map<string, number>> {
+  const m = new Map<string, number>();
+  if (codes.length === 0) return Promise.resolve(m);
+  const toTx = (c: string) => {
+    const mkt = c.startsWith('6') || c.startsWith('9') ? 'sh' : c.startsWith('4') || c.startsWith('8') ? 'bj' : 'sz';
+    return `s_${mkt}${c}`;
+  };
+  const CHUNK = 60;
+  const chunks: string[][] = [];
+  for (let i = 0; i < codes.length; i += CHUNK) chunks.push(codes.slice(i, i + CHUNK));
+  return Promise.all(
+    chunks.map(
+      (chunk) =>
+        new Promise<void>((resolve) => {
+          wx.request({
+            url: `https://qt.gtimg.cn/q=${chunk.map(toTx).join(',')}`,
+            method: 'GET',
+            success: (res: any) => {
+              try {
+                const text = typeof res.data === 'string' ? res.data : '';
+                // v_s_sh600519="1~名称~600519~价~涨跌额~涨跌%~..."  取代码(6位)与涨跌%(索引5)
+                const re = /v_s_[a-z]{2}(\d{6})="([^"]*)"/g;
+                let mm: RegExpExecArray | null;
+                while ((mm = re.exec(text)) !== null) {
+                  const parts = mm[2].split('~');
+                  const chg = parseFloat(parts[5]);
+                  if (Number.isFinite(chg)) m.set(mm[1], chg);
+                }
+              } catch (e) {
+                /* 忽略该批 */
+              }
+              resolve();
+            },
+            fail: () => resolve()
+          });
+        })
+    )
+  ).then(() => m);
+}
+
+// push2 批量（兜底，腾讯没取到的再试）：fltt=2 直接为百分比数值
+function fetchPush2Changes(codes: string[]): Promise<Map<string, number>> {
+  const m = new Map<string, number>();
+  if (codes.length === 0) return Promise.resolve(m);
+  const toSecid = (c: string) => `${c.startsWith('6') || c.startsWith('9') ? '1' : '0'}.${c}`;
+  const CHUNK = 50;
+  const chunks: string[][] = [];
+  for (let i = 0; i < codes.length; i += CHUNK) chunks.push(codes.slice(i, i + CHUNK));
+  return Promise.all(
+    chunks.map(
+      (chunk) =>
+        new Promise<void>((resolve) => {
+          wx.request({
+            url: 'https://push2.eastmoney.com/api/qt/ulist.np/get',
+            method: 'GET',
+            data: { fltt: 2, fields: 'f3,f12', secids: chunk.map(toSecid).join(','), _: Date.now() },
+            success: (res: any) => {
+              try {
+                let p: any = res.data;
+                if (typeof p === 'string') p = JSON.parse(p);
+                const diff = (p && p.data && p.data.diff) || [];
+                for (const d of diff) {
+                  const c = String(d.f12 || '');
+                  const chg = Number(d.f3);
+                  if (c && Number.isFinite(chg)) m.set(c, chg);
+                }
+              } catch (e) {
+                /* 忽略该批 */
+              }
+              resolve();
+            },
+            fail: () => resolve()
+          });
+        })
+    )
+  ).then(() => m);
+}
+
+// 个股实时涨跌%：腾讯主源 + push2 兜底；20s 短缓存复用；某轮全失败时保留上次值，估值不闪没。
+async function getBatchStockChangeMap(codes: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const uniq = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
+  if (uniq.length === 0) return map;
+
+  const now = Date.now();
+  const toFetch: string[] = [];
+  for (const c of uniq) {
+    const hit = stockChangeCache.get(c);
+    if (hit) map.set(c, hit.chg); // 先用上次已知值兜底（可能略旧）
+    if (!hit || now - hit.ts >= STOCK_CHANGE_TTL) toFetch.push(c); // 过期/没有的才刷新
+  }
+  if (toFetch.length === 0) return map; // 全部命中新鲜缓存
+
+  // 1) 腾讯主源
+  const tx = await fetchTencentChanges(toFetch);
+  tx.forEach((chg, c) => {
+    map.set(c, chg);
+    stockChangeCache.set(c, { ts: Date.now(), chg });
+  });
+  // 2) 腾讯没取到的，push2 兜底
+  const missing = toFetch.filter((c) => !tx.has(c));
+  if (missing.length > 0) {
+    const p2 = await fetchPush2Changes(missing);
+    p2.forEach((chg, c) => {
+      map.set(c, chg);
+      stockChangeCache.set(c, { ts: Date.now(), chg });
+    });
+  }
+  return map;
+}
+
+// 为多只基金自算估值：Map<基金代码, {estimatedValue, estimatedGrowth}>
+async function computeEstimatesForFunds(
+  items: { code: string; netValue: number }[]
+): Promise<Map<string, { estimatedValue: number; estimatedGrowth: number }>> {
+  const out = new Map<string, { estimatedValue: number; estimatedGrowth: number }>();
+  // 1) 各基金重仓 + 股票占净比（均带缓存，季度数据）
+  const [holdingsList, ratioList] = await Promise.all([
+    Promise.all(items.map((it) => getTopHoldingsWeighted(it.code))),
+    Promise.all(items.map((it) => getFundStockRatio(it.code)))
+  ]);
+  // 2) 汇总全部个股代码，一次批量取实时行情
+  const allStockCodes: string[] = [];
+  holdingsList.forEach((hs) => hs.forEach((h) => allStockCodes.push(h.code)));
+  const changeMap = await getBatchStockChangeMap(allStockCodes);
+  // 3) 逐基金加权：
+  //    前十大加权平均涨跌 top10Avg = Σ(占比 × 涨跌) / Σ(占比)
+  //    再按股票占净比摊分：估算涨跌 = top10Avg × 股票占净比/100
+  //    （现金/债券不随股价波动，取不到股票占比时退回不摊分的旧口径）
+  items.forEach((it, i) => {
+    const holdings = holdingsList[i];
+    let sumW = 0;
+    let sumWC = 0;
+    for (const h of holdings) {
+      const chg = changeMap.get(h.code);
+      // 剔除脏报价：A 股单日涨跌上限 30%(北交所)，|涨跌|>30% 必是停牌残值/错误数据；
+      //           正常涨停(主板±10 / 创业板·科创板±20 / 北交所±30)均保留。
+      if (chg == null || !Number.isFinite(chg) || Math.abs(chg) > 30) continue;
+      sumW += h.weight;
+      sumWC += h.weight * chg;
+    }
+    if (sumW > 0) {
+      const top10Avg = sumWC / sumW;
+      const stockRatio = ratioList[i];
+      const estimatedGrowth = stockRatio != null ? top10Avg * (stockRatio / 100) : top10Avg;
+      const estimatedValue = it.netValue * (1 + estimatedGrowth / 100);
+      out.set(it.code, { estimatedValue, estimatedGrowth });
+      estimateCache.set(it.code, { ts: Date.now(), estimatedGrowth });
+    } else {
+      // 这轮没算出（重仓或行情都没取到）：用上次成功的估值兜底，避免估值闪没
+      const cached = estimateCache.get(it.code);
+      if (cached) {
+        out.set(it.code, {
+          estimatedValue: it.netValue * (1 + cached.estimatedGrowth / 100),
+          estimatedGrowth: cached.estimatedGrowth
+        });
+      }
+    }
+  });
+  return out;
+}
+
+// 获取单只基金实时估值数据（复用批量逻辑）
+export async function getFundEstimate(code: string): Promise<FundInfo> {
+  const list = await getBatchFundEstimate([code]);
+  const info = list.find((x) => x.code === code) || list[0];
+  if (!info) {
+    throw new Error('数据格式错误：无估值数据');
+  }
+  return info;
 }
 
 // 搜索基金 - 使用天天基金搜索接口

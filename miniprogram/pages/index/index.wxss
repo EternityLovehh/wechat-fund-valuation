@@ -202,6 +202,19 @@ page {
   gap: 4rpx;
 }
 
+/* 自算估值角标：区分"前十大重仓自算"的近似值与官方估值 */
+.est-tag {
+  font-size: 16rpx;
+  color: #ff9800;
+  border: 1rpx solid #ffcc80;
+  background: #fff8ec;
+  padding: 0 4rpx;
+  border-radius: 4rpx;
+  margin-left: 6rpx;
+  line-height: 1.3;
+  vertical-align: middle;
+}
+
 .current-price {
   font-size: 26rpx;
   font-weight: 500;

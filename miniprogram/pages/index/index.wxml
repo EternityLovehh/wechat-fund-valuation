@@ -79,7 +79,10 @@ module.exports = {
         </view>
 
         <view class="item-value">
-          <view class="current-price">{{utils.toFixed(item.estimatedValue, 4)}}</view>
+          <view class="current-price">
+            {{utils.toFixed(item.estimatedValue, 4)}}
+            <text class="est-tag" wx:if="{{item.estimateSource === 'computed'}}">自算</text>
+          </view>
           <view class="holding-amount" wx:if="{{item.holdingAmount > 0}}">
             ¥{{utils.toFixed(item.holdingAmount, 0)}}
           </view>
