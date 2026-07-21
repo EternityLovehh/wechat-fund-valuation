@@ -610,3 +610,14 @@ page {
   border-radius: 6rpx;
   transition: width 0.3s ease;
 }
+
+/* 估值分时图（东财官方 PNG） */
+.gsz-chart-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  margin: 0 24rpx 20rpx;
+}
+.gsz-chart-title { font-size: 26rpx; font-weight: 600; color: #333; margin-bottom: 12rpx; }
+.gsz-chart-img { width: 100%; display: block; border-radius: 8rpx; background: #fafafa; }
+.gsz-chart-tip { font-size: 20rpx; color: #bbb; margin-top: 8rpx; }

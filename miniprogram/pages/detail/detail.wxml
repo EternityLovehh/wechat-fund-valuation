@@ -32,6 +32,13 @@ module.exports = {
       </view>
     </view>
 
+    <!-- 估值分时图（东财官方，免费 PNG） -->
+    <view wx:if="{{fund}}" class="gsz-chart-card">
+      <view class="gsz-chart-title">估值分时</view>
+      <image class="gsz-chart-img" src="https://j4.dfcfw.com/charts/pic6/{{fund.code}}.png?t={{chartTs}}" mode="widthFix" lazy-load />
+      <view class="gsz-chart-tip">东方财富官方估值分时图，盘中约每分钟更新</view>
+    </view>
+
     <!-- 三列数据展示区 -->
     <view wx:if="{{fund}}" class="data-grid">
       <!-- 第一行：基金基本数据（所有用户可见） -->

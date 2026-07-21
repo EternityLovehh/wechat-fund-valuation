@@ -35,10 +35,12 @@ Page({
     // 份额类别切换
     showShareClassModal: false,
     availableShareClasses: [] as Array<{code: string, name: string, shareClass: string}>,
-    currentShareClass: ''
+    currentShareClass: '',
+    chartTs: 0 // 估值分时图缓存刷新戳
   },
 
   onLoad(options: any) {
+    this.setData({ chartTs: Date.now() });
     console.log('Detail页面加载，参数:', options);
     const { code, from } = options;
     
