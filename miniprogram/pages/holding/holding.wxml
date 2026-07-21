@@ -35,7 +35,7 @@ module.exports = {
       <text class="ds-status ds-{{marketStatus}}">{{statusLabel || '--'}}</text>
       <text wx:if="{{valuationTime}}" class="ds-item">估值 {{valuationTime}}</text>
       <text wx:if="{{valuationDate}}" class="ds-item">净值 {{valuationDate}}</text>
-      <text class="ds-hint">· 估值仅为预测，盘后净值确认</text>
+      <text class="ds-hint">· 估值仅为预测，盘后净值确认；带「自算」为重仓估算</text>
     </view>
     <view class="summary-actions">
       <button class="import-btn" bindtap="goToImport">导入持仓</button>
@@ -64,7 +64,12 @@ module.exports = {
     </view>
   </view>
 
-  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:if="{{loading}}" class="skeleton">
+    <view class="sk-row" wx:for="{{[1,2,3,4,5]}}" wx:key="*this">
+      <view class="sk-line sk-w60"></view>
+      <view class="sk-line sk-w30"></view>
+    </view>
+  </view>
 
   <view wx:elif="{{holdings.length === 0}}" class="empty">
     <text>暂无持仓</text>

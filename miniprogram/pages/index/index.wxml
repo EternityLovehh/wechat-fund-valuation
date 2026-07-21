@@ -53,7 +53,12 @@ module.exports = {
     </view>
   </view>
 
-  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:if="{{loading}}" class="skeleton">
+    <view class="sk-row" wx:for="{{[1,2,3,4,5,6]}}" wx:key="*this">
+      <view class="sk-line sk-w60"></view>
+      <view class="sk-line sk-w30"></view>
+    </view>
+  </view>
 
   <view wx:elif="{{funds.length === 0}}" class="empty">
     <text>暂无自选基金</text>
@@ -115,7 +120,7 @@ module.exports = {
         <text class="ds-status ds-{{marketStatus}}">{{statusLabel || '--'}}</text>
         <text wx:if="{{valuationTime}}" class="ds-item">估值 {{valuationTime}}</text>
         <text wx:if="{{valuationDate}}" class="ds-item">净值 {{valuationDate}}</text>
-        <text class="ds-hint">估值仅为预测，盘后基金公司确认净值后更新</text>
+        <text class="ds-hint">估值仅为预测，盘后基金公司确认净值后更新；带「自算」为前十大重仓估算，非官方值</text>
       </view>
     </scroll-view>
   </view>
