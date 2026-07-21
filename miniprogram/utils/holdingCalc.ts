@@ -204,6 +204,55 @@ export function computeImportedDisplay(
   return { holdingAmount, confirmedMarketValue, pendingAmount, totalCost, profit, profitRate, todayProfit };
 }
 
+// ===== 持仓诊断：资产类型分布 + 集中度 =====
+export interface DiagnosisTypeSlice {
+  type: string;    // 基金类型（股票型/混合型/债券型/指数型/QDII/LOF/其他）
+  amount: number;  // 该类型持有金额合计
+  pct: number;     // 占总持仓百分比
+}
+export interface PortfolioDiagnosis {
+  byType: DiagnosisTypeSlice[]; // 按占比降序
+  count: number;                // 持仓基金数（金额>0）
+  top1Pct: number;              // 第一大持仓占比
+  top3Pct: number;              // 前三大持仓占比合计
+  warnings: string[];           // 集中度提示
+}
+
+// items: 每只基金的 { 类型, 持有金额 }
+export function computePortfolioDiagnosis(
+  items: Array<{ fundType: string; amount: number }>
+): PortfolioDiagnosis {
+  const valid = items.filter((i) => (Number(i.amount) || 0) > 0);
+  const total = valid.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+
+  // 按类型聚合
+  const typeMap: Record<string, number> = {};
+  for (const i of valid) {
+    const t = i.fundType || '其他';
+    typeMap[t] = (typeMap[t] || 0) + (Number(i.amount) || 0);
+  }
+  const byType: DiagnosisTypeSlice[] = Object.keys(typeMap)
+    .map((t) => ({ type: t, amount: typeMap[t], pct: total > 0 ? (typeMap[t] / total) * 100 : 0 }))
+    .sort((a, b) => b.amount - a.amount);
+
+  // 集中度：按单只金额降序
+  const amounts = valid.map((i) => Number(i.amount) || 0).sort((a, b) => b - a);
+  const top1Pct = total > 0 ? (amounts[0] / total) * 100 : 0;
+  const top3Pct = total > 0 ? (amounts.slice(0, 3).reduce((s, a) => s + a, 0) / total) * 100 : 0;
+
+  const warnings: string[] = [];
+  if (valid.length > 0) {
+    if (top1Pct >= 50) warnings.push(`单只基金占比 ${top1Pct.toFixed(0)}%，持仓较集中`);
+    else if (top3Pct >= 80 && valid.length >= 3) warnings.push(`前三大占比 ${top3Pct.toFixed(0)}%，集中度偏高`);
+    const stockLike = byType.filter((s) => s.type === '股票型' || s.type === '指数型' || s.type === '混合型')
+      .reduce((s, x) => s + x.pct, 0);
+    if (stockLike >= 85) warnings.push(`权益类约 ${stockLike.toFixed(0)}%，波动风险较高`);
+    if (valid.length === 1) warnings.push('仅持有 1 只基金，建议适度分散');
+  }
+
+  return { byType, count: valid.length, top1Pct, top3Pct, warnings };
+}
+
 // ===== 旧数据迁移：把旧的整仓 pending / 无 pendingAdds 的记录规整成新结构 =====
 export function normalizeHolding(h: ImportedHolding): ImportedHolding {
   if (Array.isArray(h.pendingAdds)) return h; // 已是新结构

@@ -301,3 +301,24 @@ page {
   line-height: 1.3;
   vertical-align: middle;
 }
+
+/* 持仓诊断卡片 */
+.diagnosis {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+.diag-title { font-size: 28rpx; font-weight: 600; color: #333; margin-bottom: 18rpx; }
+.diag-stats { display: flex; justify-content: space-around; margin-bottom: 20rpx; }
+.diag-stat { display: flex; flex-direction: column; align-items: center; }
+.ds-num { font-size: 34rpx; font-weight: 600; color: #7CB9E8; }
+.ds-lab { font-size: 22rpx; color: #999; margin-top: 4rpx; }
+.diag-types { display: flex; flex-direction: column; gap: 12rpx; }
+.diag-type-row { display: flex; align-items: center; }
+.dt-name { width: 120rpx; font-size: 24rpx; color: #666; }
+.dt-bar-bg { flex: 1; height: 16rpx; background: #f0f2f5; border-radius: 8rpx; overflow: hidden; margin: 0 12rpx; }
+.dt-bar { height: 100%; background: #7CB9E8; border-radius: 8rpx; }
+.dt-pct { width: 72rpx; text-align: right; font-size: 24rpx; color: #666; }
+.diag-warns { margin-top: 18rpx; }
+.diag-warn { font-size: 24rpx; color: #ff9800; line-height: 1.7; }

@@ -1369,7 +1369,7 @@ export async function getFundIndustry(code: string): Promise<any> {
 }
 
 // 根据基金代码判断基金类型（简单判断）
-function getFundType(code: string): string {
+export function getFundType(code: string): string {
   const firstChar = code.charAt(0);
   switch (firstChar) {
     case '0':

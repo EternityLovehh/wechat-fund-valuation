@@ -1,7 +1,7 @@
 // holding.ts - 持仓页面
-import { getBatchFundEstimate, FundInfo, getNetValueByDate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getNetValueByDate, getFundType, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
-import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
+import { normalizeHolding, settlePendingAdds, computeImportedDisplay, computePortfolioDiagnosis, PortfolioDiagnosis } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
 import { recordPortfolioSnapshot } from '../../utils/history'
 
@@ -49,7 +49,8 @@ Page({
     marketStatus: '' as MarketStatus | '',
     statusLabel: '',
     valuationTime: '', // 估值时间 gztime，如 "2026-05-09 14:32"
-    valuationDate: ''  // 净值日期 jzrq，如 "2026-05-09"
+    valuationDate: '', // 净值日期 jzrq，如 "2026-05-09"
+    diagnosis: null as PortfolioDiagnosis | null // 持仓诊断
   } as {
     holdings: UnifiedHoldingDisplay[];
     totalCost: number;
@@ -65,6 +66,7 @@ Page({
     statusLabel: string;
     valuationTime: string;
     valuationDate: string;
+    diagnosis: PortfolioDiagnosis | null;
   },
 
   autoRefreshTimer: null as number | null,
@@ -372,6 +374,14 @@ Page({
       // 已有更新的一次加载在跑：丢弃本次（较旧）结果，避免覆盖闪烁
       if (seq !== this.loadSeq) return;
 
+      // 持仓诊断：按基金类型分布 + 集中度
+      const diagnosis = computePortfolioDiagnosis(
+        allHoldings.map((h) => ({
+          fundType: getFundType(h.code),
+          amount: Number((h as any).currentAmount) || 0
+        }))
+      );
+
       // 记录当日资产快照（供总资产走势/收益日历）；仅在有持仓时记录
       if (allHoldings.length > 0 && totalValue > 0) {
         recordPortfolioSnapshot({
@@ -394,6 +404,7 @@ Page({
         statusLabel: STATUS_LABELS[status],
         valuationTime,
         valuationDate,
+        diagnosis,
         loading: false
       });
     } catch (e) {

@@ -44,6 +44,26 @@ module.exports = {
     </view>
   </view>
 
+  <!-- 持仓诊断 -->
+  <view wx:if="{{diagnosis && diagnosis.count > 0}}" class="diagnosis">
+    <view class="diag-title">持仓诊断</view>
+    <view class="diag-stats">
+      <view class="diag-stat"><text class="ds-num">{{diagnosis.count}}</text><text class="ds-lab">持仓数</text></view>
+      <view class="diag-stat"><text class="ds-num">{{utils.toFixed(diagnosis.top1Pct, 0)}}%</text><text class="ds-lab">第一大</text></view>
+      <view class="diag-stat"><text class="ds-num">{{utils.toFixed(diagnosis.top3Pct, 0)}}%</text><text class="ds-lab">前三大</text></view>
+    </view>
+    <view class="diag-types">
+      <view wx:for="{{diagnosis.byType}}" wx:key="type" class="diag-type-row">
+        <text class="dt-name">{{item.type}}</text>
+        <view class="dt-bar-bg"><view class="dt-bar" style="width:{{item.pct}}%"></view></view>
+        <text class="dt-pct">{{utils.toFixed(item.pct, 0)}}%</text>
+      </view>
+    </view>
+    <view wx:if="{{diagnosis.warnings.length > 0}}" class="diag-warns">
+      <view wx:for="{{diagnosis.warnings}}" wx:key="*this" class="diag-warn">⚠ {{item}}</view>
+    </view>
+  </view>
+
   <view wx:if="{{loading}}" class="loading">加载中...</view>
 
   <view wx:elif="{{holdings.length === 0}}" class="empty">
