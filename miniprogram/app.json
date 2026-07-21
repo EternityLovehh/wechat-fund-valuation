@@ -4,7 +4,8 @@
     "pages/holding/holding",
     "pages/search/search",
     "pages/detail/detail",
-    "pages/import/import"
+    "pages/import/import",
+    "pages/calendar/calendar"
   ],
   "window": {
     "navigationBarTextStyle": "white",

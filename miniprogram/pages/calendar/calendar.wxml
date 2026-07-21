@@ -1,0 +1,48 @@
+<!--calendar.wxml - 收益日历/月度统计-->
+<wxs module="u">
+var fmt = function(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return '0.00';
+  return (n >= 0 ? '+' : '') + n.toFixed(2);
+}
+module.exports = { fmt: fmt }
+</wxs>
+
+<view class="container">
+  <!-- 月度汇总 -->
+  <view class="month-summary">
+    <view class="ms-nav" bindtap="prevMonth">‹</view>
+    <view class="ms-center">
+      <view class="ms-label">{{monthLabel}}</view>
+      <view class="ms-profit {{monthProfit >= 0 ? 'positive' : 'negative'}}">
+        本月估算收益 {{u.fmt(monthProfit)}}
+      </view>
+      <view class="ms-days">盈 {{monthWinDays}} 天 · 亏 {{monthLoseDays}} 天</view>
+    </view>
+    <view class="ms-nav {{canGoNext ? '' : 'disabled'}}" bindtap="nextMonth">›</view>
+  </view>
+
+  <!-- 星期表头 -->
+  <view class="week-heads">
+    <view wx:for="{{weekHeads}}" wx:key="*this" class="wh">{{item}}</view>
+  </view>
+
+  <!-- 日历格子 -->
+  <view class="grid">
+    <view
+      wx:for="{{cells}}"
+      wx:key="index"
+      class="cell {{item.day === 0 ? 'blank' : ''}} {{item.isToday ? 'today' : ''}}"
+    >
+      <block wx:if="{{item.day !== 0}}">
+        <view class="cell-day">{{item.day}}</view>
+        <view wx:if="{{item.hasData}}" class="cell-profit {{item.profit >= 0 ? 'positive' : 'negative'}}">
+          {{u.fmt(item.profit)}}
+        </view>
+        <view wx:else class="cell-empty">-</view>
+      </block>
+    </view>
+  </view>
+
+  <view class="tip">数据自"每日快照"上线后按天累积，此前日期无记录。当日收益为估算值，盘后以确认净值为准。</view>
+</view>

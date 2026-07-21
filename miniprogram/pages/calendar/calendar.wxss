@@ -1,0 +1,76 @@
+/* calendar.wxss - 收益日历 */
+.container {
+  min-height: 100vh;
+  background: #f5f6fa;
+  padding: 24rpx;
+  box-sizing: border-box;
+}
+
+.positive { color: #e64340; }
+.negative { color: #1aad19; }
+
+.month-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 24rpx;
+  margin-bottom: 20rpx;
+}
+.ms-nav {
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  text-align: center;
+  font-size: 44rpx;
+  color: #7CB9E8;
+}
+.ms-nav.disabled { color: #ccc; }
+.ms-center { flex: 1; text-align: center; }
+.ms-label { font-size: 32rpx; font-weight: 600; color: #333; }
+.ms-profit { font-size: 30rpx; margin-top: 8rpx; }
+.ms-days { font-size: 22rpx; color: #999; margin-top: 6rpx; }
+
+.week-heads {
+  display: flex;
+  padding: 0 6rpx;
+  margin-bottom: 8rpx;
+}
+.wh {
+  flex: 1;
+  text-align: center;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 10rpx 6rpx;
+}
+.cell {
+  width: 14.285%;
+  height: 110rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rpx 0;
+}
+.cell.blank { visibility: hidden; }
+.cell.today { background: #eef6fd; border-radius: 12rpx; }
+.cell-day { font-size: 24rpx; color: #666; }
+.cell-profit { font-size: 22rpx; margin-top: 4rpx; }
+.cell-empty { font-size: 22rpx; color: #ccc; margin-top: 4rpx; }
+
+.tip {
+  font-size: 22rpx;
+  color: #aaa;
+  line-height: 1.6;
+  margin-top: 24rpx;
+  padding: 0 8rpx;
+}

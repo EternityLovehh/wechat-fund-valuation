@@ -418,6 +418,10 @@ Page({
     wx.navigateTo({ url: '/pages/import/import' });
   },
 
+  goToCalendar() {
+    wx.navigateTo({ url: '/pages/calendar/calendar' });
+  },
+
   // 删除单个持仓
   deleteHolding(e: any) {
     const { code, name, type } = e.currentTarget.dataset;

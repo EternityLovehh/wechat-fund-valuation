@@ -101,7 +101,7 @@ page {
   margin-top: 12rpx;
 }
 
-.import-btn, .clear-btn {
+.import-btn, .clear-btn, .calendar-btn {
   flex: 1;
   background: #7CB9E8;
   color: white;
@@ -112,6 +112,10 @@ page {
   line-height: 1.4;
   border-radius: 8rpx;
   font-weight: 500;
+}
+
+.calendar-btn {
+  background: #9c88d4;
 }
 
 .clear-btn {

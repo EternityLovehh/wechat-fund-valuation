@@ -39,6 +39,7 @@ module.exports = {
     </view>
     <view class="summary-actions">
       <button class="import-btn" bindtap="goToImport">导入持仓</button>
+      <button class="calendar-btn" bindtap="goToCalendar">收益日历</button>
       <button class="clear-btn" bindtap="clearAllHoldings" wx:if="{{holdings.length > 0}}">清空</button>
     </view>
   </view>
