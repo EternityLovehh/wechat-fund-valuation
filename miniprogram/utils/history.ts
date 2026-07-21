@@ -113,3 +113,18 @@ export function getEstimateAccuracy(code: string, limit: number = 10): EstimateA
     .sort((a, b) => (a.date > b.date ? -1 : 1))
     .slice(0, limit);
 }
+
+// 组合级估值准确度汇总（跨所有基金，最新在前），用于收益日历页整体展示
+export interface EstimateAccuracySummary {
+  count: number;             // 可对比的记录数
+  avgErr: number;            // 平均绝对偏差（百分点）
+  records: EstimateAccuracy[]; // 最近若干条（最新在前）
+}
+export function getEstimateAccuracySummary(limit: number = 15): EstimateAccuracySummary {
+  const all = getEstimateAccuracyAll()
+    .filter((r) => r.est != null && r.actual != null)
+    .sort((a, b) => (a.date > b.date ? -1 : 1));
+  const errs = all.map((r) => Math.abs((r.est as number) - (r.actual as number)));
+  const avgErr = errs.length ? errs.reduce((s, e) => s + e, 0) / errs.length : 0;
+  return { count: all.length, avgErr, records: all.slice(0, limit) };
+}

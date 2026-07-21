@@ -1,7 +1,7 @@
 // calendar.ts - 收益日历 / 月度统计
 // 数据来自 utils/history 的每日资产快照(totalDayProfit=当日估算收益)。
 // 快照从"数据快照地基"上线后开始按天累积，早于此的日期无数据(显示"-")。
-import { getPortfolioHistory, PortfolioSnapshot } from '../../utils/history'
+import { getPortfolioHistory, PortfolioSnapshot, getEstimateAccuracySummary, EstimateAccuracy } from '../../utils/history'
 import { getTodayStr } from '../../utils/appDate'
 
 interface DayCell {
@@ -27,13 +27,30 @@ Page({
     hasTrend: false,
     trendLatest: 0,     // 最新总市值
     trendFrom: '',      // 起始日期
-    trendTo: ''         // 最新日期
+    trendTo: '',        // 最新日期
+    // 估值准确度
+    hasAcc: false,
+    accCount: 0,
+    accAvgErr: 0,
+    accRecords: [] as EstimateAccuracy[]
   },
 
   onLoad() {
     const today = getTodayStr();
     const [y, m] = today.split('-').map(Number);
     this.build(y, m);
+    this.loadAccuracy();
+  },
+
+  // 估值准确度汇总（跨所有基金）
+  loadAccuracy() {
+    const s = getEstimateAccuracySummary(15);
+    this.setData({
+      hasAcc: s.count > 0,
+      accCount: s.count,
+      accAvgErr: s.avgErr,
+      accRecords: s.records
+    });
   },
 
   onReady() {

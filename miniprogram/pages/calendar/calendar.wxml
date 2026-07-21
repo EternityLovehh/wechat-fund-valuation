@@ -61,4 +61,28 @@ module.exports = { fmt: fmt, fmt2: fmt2 }
   </view>
 
   <view class="tip">数据自"每日快照"上线后按天累积，此前日期无记录。当日收益为估算值，盘后以确认净值为准。</view>
+
+  <!-- 估值准确度 -->
+  <view wx:if="{{hasAcc}}" class="acc-card">
+    <view class="acc-head">
+      <text class="acc-title">估值准确度</text>
+      <text class="acc-avg">近{{accCount}}次 平均偏差 {{u.fmt2(accAvgErr)}}%</text>
+    </view>
+    <view class="acc-list">
+      <view class="acc-row acc-head-row">
+        <text class="ac-code">代码</text>
+        <text class="ac-cell">日期</text>
+        <text class="ac-cell">估算</text>
+        <text class="ac-cell">实际</text>
+        <text class="ac-cell">偏差</text>
+      </view>
+      <view wx:for="{{accRecords}}" wx:key="index" class="acc-row">
+        <text class="ac-code">{{item.code}}</text>
+        <text class="ac-cell">{{item.date}}</text>
+        <text class="ac-cell">{{u.fmt(item.est)}}%</text>
+        <text class="ac-cell">{{u.fmt(item.actual)}}%</text>
+        <text class="ac-cell">{{u.fmt2(item.est - item.actual)}}</text>
+      </view>
+    </view>
+  </view>
 </view>
