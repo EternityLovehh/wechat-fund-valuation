@@ -1,5 +1,7 @@
 // 基金API工具类 - 接入真实数据
 import { isMarketHoliday } from './tradingCalendar'
+import { recordEstimateForecast, recordEstimateActual } from './history'
+import { getTodayStr } from './appDate'
 
 export interface FundInfo {
   code: string;
@@ -273,6 +275,17 @@ export async function getBatchFundEstimate(codes: string[]): Promise<FundInfo[]>
       }
     } catch (e) {
       console.warn('[估值诊断] 自算失败:', e);
+    }
+  }
+
+  // 采集估值准确度数据（向前累积）：
+  //   已公布净值(navchg) → 记该净值日的实际涨跌；否则(official/computed) → 记当日估算涨跌
+  const today = getTodayStr();
+  for (const f of out) {
+    if (f.estimateSource === 'navchg' && f.valuationDate) {
+      recordEstimateActual(f.code, f.valuationDate, f.estimatedGrowth);
+    } else if (f.estimateSource === 'official' || f.estimateSource === 'computed') {
+      recordEstimateForecast(f.code, today, f.estimatedGrowth);
     }
   }
 

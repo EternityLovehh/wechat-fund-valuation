@@ -49,3 +49,67 @@ export function recordPortfolioSnapshot(
     // 忽略：快照记录失败不影响页面
   }
 }
+
+// ===== 估值准确度：记录每只基金"当日估算涨跌" vs "实际公布净值涨跌"，供准确度回顾 =====
+// 采集时机：盘中/盘后拿到估算(official/computed) → 记 est；当日净值公布(navchg) → 记 actual。
+// 数据按天向前累积；早于本功能上线的日期无记录。
+const ESTIMATE_ACC_KEY = `estimate_accuracy${envSuffix()}`;
+const MAX_ACC_RECORDS = 800; // 约 40 只 × 20 天
+
+export interface EstimateAccuracy {
+  code: string;
+  date: string;          // 交易日 YYYY-MM-DD（估值针对的那一天）
+  est: number | null;    // 当日估算涨跌 %
+  actual: number | null; // 当日实际净值涨跌 %（公布后）
+}
+
+export function getEstimateAccuracyAll(): EstimateAccuracy[] {
+  try {
+    const d = wx.getStorageSync(ESTIMATE_ACC_KEY);
+    return Array.isArray(d) ? d : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveEstimateAccuracy(list: EstimateAccuracy[]): void {
+  try {
+    list.sort((a, b) => (a.date < b.date ? -1 : 1));
+    const trimmed = list.length > MAX_ACC_RECORDS ? list.slice(list.length - MAX_ACC_RECORDS) : list;
+    wx.setStorageSync(ESTIMATE_ACC_KEY, trimmed);
+  } catch (e) {
+    // 忽略
+  }
+}
+
+function upsertAccuracy(code: string, date: string, patch: Partial<EstimateAccuracy>): void {
+  if (!code || !date) return;
+  const list = getEstimateAccuracyAll();
+  const i = list.findIndex((r) => r.code === code && r.date === date);
+  if (i >= 0) {
+    list[i] = { ...list[i], ...patch };
+  } else {
+    list.push({ code, date, est: null, actual: null, ...patch });
+  }
+  saveEstimateAccuracy(list);
+}
+
+// 记录当日估算涨跌（不覆盖已有 actual）
+export function recordEstimateForecast(code: string, date: string, est: number): void {
+  if (!Number.isFinite(est)) return;
+  upsertAccuracy(code, date, { est });
+}
+
+// 记录当日实际净值涨跌（净值公布后）
+export function recordEstimateActual(code: string, date: string, actual: number): void {
+  if (!Number.isFinite(actual)) return;
+  upsertAccuracy(code, date, { actual });
+}
+
+// 取某只基金近 N 条"估算与实际都齐全"的对比（最新在前），用于展示准确度
+export function getEstimateAccuracy(code: string, limit: number = 10): EstimateAccuracy[] {
+  return getEstimateAccuracyAll()
+    .filter((r) => r.code === code && r.est != null && r.actual != null)
+    .sort((a, b) => (a.date > b.date ? -1 : 1))
+    .slice(0, limit);
+}
