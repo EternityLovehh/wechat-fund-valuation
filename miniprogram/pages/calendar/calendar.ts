@@ -22,13 +22,90 @@ Page({
     monthProfit: 0,     // 本月收益合计
     monthWinDays: 0,    // 盈利天数
     monthLoseDays: 0,   // 亏损天数
-    canGoNext: false    // 是否允许翻到下个月(不超过当前月)
+    canGoNext: false,   // 是否允许翻到下个月(不超过当前月)
+    // 总资产走势
+    hasTrend: false,
+    trendLatest: 0,     // 最新总市值
+    trendFrom: '',      // 起始日期
+    trendTo: ''         // 最新日期
   },
 
   onLoad() {
     const today = getTodayStr();
     const [y, m] = today.split('-').map(Number);
     this.build(y, m);
+  },
+
+  onReady() {
+    this.drawTrend();
+  },
+
+  // 绘制总资产走势（取最近 60 个快照点，Canvas 2D 折线）
+  drawTrend() {
+    const history = getPortfolioHistory();
+    const points = history.slice(-60); // 最近 60 天
+    if (points.length < 2) {
+      this.setData({ hasTrend: false });
+      return;
+    }
+    this.setData({
+      hasTrend: true,
+      trendLatest: Number(points[points.length - 1].totalValue) || 0,
+      trendFrom: points[0].date.slice(5),
+      trendTo: points[points.length - 1].date.slice(5)
+    });
+
+    const query = wx.createSelectorQuery();
+    query.select('#trendChart').fields({ node: true, size: true }).exec((res) => {
+      if (!res || !res[0] || !res[0].node) return;
+      const canvas = res[0].node;
+      const ctx = canvas.getContext('2d');
+      const dpr = (wx.getSystemInfoSync().pixelRatio) || 2;
+      const W = res[0].width;
+      const H = res[0].height;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, W, H);
+
+      const pad = { l: 8, r: 8, t: 12, b: 12 };
+      const vals = points.map((p) => Number(p.totalValue) || 0);
+      let min = Math.min(...vals);
+      let max = Math.max(...vals);
+      if (max === min) { max += 1; min -= 1; } // 防止除零
+      const plotW = W - pad.l - pad.r;
+      const plotH = H - pad.t - pad.b;
+      const x = (i: number) => pad.l + (plotW * i) / (points.length - 1);
+      const y = (v: number) => pad.t + plotH * (1 - (v - min) / (max - min));
+
+      const up = vals[vals.length - 1] >= vals[0];
+      const line = up ? '#e64340' : '#1aad19';
+      const fill = up ? 'rgba(230,67,64,0.10)' : 'rgba(26,173,25,0.10)';
+
+      // 面积
+      ctx.beginPath();
+      ctx.moveTo(x(0), y(vals[0]));
+      for (let i = 1; i < vals.length; i++) ctx.lineTo(x(i), y(vals[i]));
+      ctx.lineTo(x(vals.length - 1), pad.t + plotH);
+      ctx.lineTo(x(0), pad.t + plotH);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      // 折线
+      ctx.beginPath();
+      ctx.moveTo(x(0), y(vals[0]));
+      for (let i = 1; i < vals.length; i++) ctx.lineTo(x(i), y(vals[i]));
+      ctx.strokeStyle = line;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 末点
+      ctx.beginPath();
+      ctx.arc(x(vals.length - 1), y(vals[vals.length - 1]), 3, 0, Math.PI * 2);
+      ctx.fillStyle = line;
+      ctx.fill();
+    });
   },
 
   // 构建某年某月的日历

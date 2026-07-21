@@ -5,10 +5,26 @@ var fmt = function(v) {
   if (isNaN(n)) return '0.00';
   return (n >= 0 ? '+' : '') + n.toFixed(2);
 }
-module.exports = { fmt: fmt }
+var fmt2 = function(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return '0.00';
+  return n.toFixed(2);
+}
+module.exports = { fmt: fmt, fmt2: fmt2 }
 </wxs>
 
 <view class="container">
+  <!-- 总资产走势 -->
+  <view class="trend-card">
+    <view class="trend-head">
+      <text class="trend-title">总资产走势</text>
+      <text wx:if="{{hasTrend}}" class="trend-latest">¥{{u.fmt2(trendLatest)}}</text>
+    </view>
+    <canvas wx:if="{{hasTrend}}" type="2d" id="trendChart" class="trend-canvas"></canvas>
+    <view wx:if="{{hasTrend}}" class="trend-range">{{trendFrom}} ~ {{trendTo}}</view>
+    <view wx:else class="trend-empty">数据积累中，多打开几天后显示走势</view>
+  </view>
+
   <!-- 月度汇总 -->
   <view class="month-summary">
     <view class="ms-nav" bindtap="prevMonth">‹</view>
