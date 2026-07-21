@@ -1,4 +1,6 @@
 // 基金API工具类 - 接入真实数据
+import { isMarketHoliday } from './tradingCalendar'
+
 export interface FundInfo {
   code: string;
   name: string;
@@ -20,12 +22,14 @@ export type MarketStatus =
   | 'lunch'       // 午休（11:30-13:00）
   | 'pre-open'    // 盘前（工作日 00:00-09:30）
   | 'post-close'  // 盘后（工作日 15:00-23:59）
+  | 'holiday'     // 节假日休市（A 股法定节假日）
   | 'weekend';    // 周末
 
-// 当前 A 股市场状态（不含节假日，节假日按工作日处理；fundgz 自身在节假日会停止更新）
+// 当前 A 股市场状态（含节假日：法定节假日返回 'holiday'）
 export function getMarketStatus(now: Date = new Date()): MarketStatus {
   const day = now.getDay(); // 0=周日, 6=周六
   if (day === 0 || day === 6) return 'weekend';
+  if (isMarketHoliday(now)) return 'holiday'; // 节假日休市（周末已在上面拦截）
   const minutes = now.getHours() * 60 + now.getMinutes();
   const OPEN_AM = 9 * 60 + 30;   // 09:30
   const CLOSE_AM = 11 * 60 + 30; // 11:30

@@ -164,6 +164,7 @@ Page({
         'lunch': '午间休市',
         'pre-open': '盘前',
         'post-close': '盘后',
+        'holiday': '休市',
         'weekend': '休市'
       };
       let latestUpdateTime = '';

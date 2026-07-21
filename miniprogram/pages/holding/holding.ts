@@ -357,6 +357,7 @@ Page({
         'lunch': '午间休市',
         'pre-open': '盘前',
         'post-close': '盘后',
+        'holiday': '休市',
         'weekend': '休市'
       };
       // 估值时间只显示 HH:mm；净值日期截 MM-DD
