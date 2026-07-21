@@ -3,6 +3,7 @@ import { getBatchFundEstimate, FundInfo, getNetValueByDate, isMarketActive, getM
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
 import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
+import { recordPortfolioSnapshot } from '../../utils/history'
 
 interface HoldingDisplay extends HoldingFund {
   currentValue: number;
@@ -370,6 +371,16 @@ Page({
 
       // 已有更新的一次加载在跑：丢弃本次（较旧）结果，避免覆盖闪烁
       if (seq !== this.loadSeq) return;
+
+      // 记录当日资产快照（供总资产走势/收益日历）；仅在有持仓时记录
+      if (allHoldings.length > 0 && totalValue > 0) {
+        recordPortfolioSnapshot({
+          totalValue: Number(totalValue) || 0,
+          totalCost: Number(totalCost) || 0,
+          totalProfit: Number(totalProfit) || 0,
+          totalDayProfit: Number(totalDayProfit) || 0
+        });
+      }
 
       this.setData({
         holdings: allHoldings,
