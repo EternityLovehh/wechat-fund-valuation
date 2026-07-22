@@ -62,7 +62,6 @@ module.exports = {
           <view class="c c-bd">关联板块</view>
           <view class="c c-m">近1月</view>
           <view class="c c-m">近1年</view>
-          <view class="c c-amt">持有金额</view>
         </view>
         <view wx:for="{{funds}}" wx:key="code" class="trow" bindtap="goToDetail" data-code="{{item.code}}">
           <view class="c c-name">
@@ -84,7 +83,6 @@ module.exports = {
           </view>
           <view class="c c-m"><text class="cell-top {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</text></view>
           <view class="c c-m"><text class="cell-top {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</text></view>
-          <view class="c c-amt"><text class="cell-top dark">{{item.holdingAmount > 0 ? '¥' + utils.toFixed(item.holdingAmount, 0) : '-'}}</text></view>
         </view>
       </view>
     </scroll-view>
