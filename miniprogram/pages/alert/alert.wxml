@@ -39,6 +39,17 @@
     </view>
   </view>
 
+  <!-- 测试(命中阈值才会发;控制台云端测试无法发 openapi,须从这里触发) -->
+  <view class="card" wx:if="{{enabled}}">
+    <view class="row row-main" bindtap="onTest">
+      <view class="row-l">
+        <text class="row-title">发送测试提醒</text>
+        <text class="row-sub">立即检查一次,命中阈值则推送到微信服务通知</text>
+      </view>
+      <text class="renew-badge">测试</text>
+    </view>
+  </view>
+
   <!-- 说明 -->
   <view class="tips">
     <view class="tips-title">说明</view>

@@ -79,6 +79,27 @@ Page({
     updateThreshold(this.data.upPct, v);
   },
 
+  // 发送测试提醒:从小程序端触发 checkAlerts(有有效 access_token,可真正发送)
+  // 「云端测试」控制台无法调用 openapi(-501001),需从小程序或定时触发器触发。
+  async onTest() {
+    wx.showLoading({ title: '检查中', mask: true });
+    try {
+      const r: any = await wx.cloud.callFunction({ name: 'checkAlerts', data: { state: 'trial' } });
+      wx.hideLoading();
+      const res = (r && r.result) || {};
+      const d = (res.debug && res.debug[0]) || {};
+      let msg = '';
+      if (res.sent > 0) msg = '已发送,请查看微信服务通知';
+      else if (d.result) msg = `未发送:${d.errMsg || d.skip || d.result}`;
+      else if (res.reason) msg = `未发送:${res.reason}`;
+      else msg = `sent=${res.sent}`;
+      wx.showModal({ title: res.sent > 0 ? '发送成功' : '未发送', content: msg, showCancel: false });
+    } catch (e: any) {
+      wx.hideLoading();
+      wx.showModal({ title: '调用失败', content: (e && e.errMsg) || String(e), showCancel: false });
+    }
+  },
+
   // 手动续订今日额度
   async onRenew() {
     if (this.data.busy) return;
