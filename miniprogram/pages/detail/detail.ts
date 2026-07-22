@@ -1,5 +1,5 @@
 // detail.ts - 基金详情页面
-import { getFundEstimate, FundInfo, getFundHoldings, getFundIndustry, getFundYearGrowth, getBatchStockQuotes, getFundBaseInfo, getFundPeriodIncrease, FundBaseInfo, PeriodPerf } from '../../utils/fundApi'
+import { getFundEstimate, FundInfo, getFundHoldings, getFundSectorAllocation, getFundYearGrowth, getBatchStockQuotes, getFundBaseInfo, getFundPeriodIncrease, FundBaseInfo, PeriodPerf } from '../../utils/fundApi'
 import { getHoldingFunds, removeHolding, getImportedHoldings, saveImportedHolding, removeImportedHolding, addOptionalFund } from '../../utils/storage'
 import { normalizeHolding } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
@@ -276,10 +276,15 @@ Page({
     }
     
     try {
-      const industryData = await getFundIndustry(this.data.code);
-      console.log('行业数据:', industryData);
-      if (industryData.industries && industryData.industries.length > 0) {
-        this.setData({ industry: industryData });
+      // 关联板块/行业配置：用能用的 FundMNSectorAllocation(证监会行业门类 + 占净值比)
+      const sectors = await getFundSectorAllocation(this.data.code);
+      if (sectors.length > 0) {
+        this.setData({
+          industry: {
+            industries: sectors.map((s) => ({ name: s.name, ratio: s.ratio.toFixed(2) + '%' })),
+            date: ''
+          }
+        });
       }
     } catch (e) {
       console.error('获取行业数据失败:', e);
