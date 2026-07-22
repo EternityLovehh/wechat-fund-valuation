@@ -329,7 +329,7 @@ page {
    列顺序: 名称(1) 关联板块(2) 持有收益(3) 当日涨幅(4) 持有金额(5) 近1月(6) 近1年(7)
    列宽合计 = 260+160+180+140+170+120+120 = 1150rpx (须与 .tbl 一致,否则表头/数据错位) */
 .tbl-scroll { width: 100%; background: #fff; }
-.tbl { width: 1190rpx; }
+.tbl { width: 1230rpx; }
 .trow {
   display: flex; align-items: stretch;
   border-bottom: 1rpx solid #eef0f3; background: #fff;
@@ -347,7 +347,7 @@ page {
 .c-earn { width: 180rpx; }  /* 持有收益 */
 .c-day  { width: 140rpx; }  /* 当日涨幅 */
 .c-amt  { width: 170rpx; }  /* 持有金额 */
-.c-m    { width: 140rpx; }  /* 近1月/近1年(容纳 -27.06% 等7~8字符) */
+.c-m    { width: 160rpx; }  /* 近1月/近1年(容纳 +123.45% 等8字符+列间距) */
 
 /* 首列名称:粘性固定 + 左对齐 */
 .c-name {
