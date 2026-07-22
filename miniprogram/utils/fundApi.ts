@@ -434,28 +434,48 @@ export function getMarketNews(pageSize: number = 30): Promise<NewsItem[]> {
 
 // 基金排行（东财 rankhandler，CSV 字段按位取）
 export interface RankItem { code: string; name: string; nav: number; ret: number }
-const RANK_SC_INDEX: Record<string, number> = { rzf: 6, '1yzf': 8, '3yzf': 9, '1nzf': 11, jnzf: 14 };
-export function getFundRankList(ft: string, sc: string, pn: number = 30): Promise<RankItem[]> {
+// 手机端排行 SortColumn 映射(兜底用)
+const RANK_SORT_COL: Record<string, string> = { rzf: 'RZDF', '1yzf': 'SYL_Y', '3yzf': 'SYL_3Y', '1nzf': 'SYL_1N', jnzf: 'SYL_JN' };
+
+// 基金排行：云函数优先(web rankhandler 需 Referer, 小程序端设不了, 故走云函数; 类型筛选准确);
+//           云函数不可用时回落手机端 FundRankNewList(仅"全部", 不支持类型筛选)。
+export async function getFundRankList(ft: string, sc: string, pn: number = 30): Promise<RankItem[]> {
+  if (typeof wx !== 'undefined' && wx.cloud && typeof wx.cloud.callFunction === 'function') {
+    try {
+      const res: any = await wx.cloud.callFunction({ name: 'getFund', data: { rank: { ft, sc, pn } } });
+      const r = res && res.result;
+      if (r && r.success && Array.isArray(r.rank)) return r.rank;
+    } catch (e) {
+      /* 回落 */
+    }
+  }
+  return getFundRankListDirect(sc, pn);
+}
+
+// 兜底：手机端 FundRankNewList(不需 Referer, 但类型参数无效, 只能取全部)
+function getFundRankListDirect(sc: string, pn: number): Promise<RankItem[]> {
+  const col = RANK_SORT_COL[sc] || 'SYL_1N';
   return new Promise((resolve) => {
     wx.request({
-      url: 'https://fund.eastmoney.com/data/rankhandler.aspx',
+      url: 'https://fundmobapi.eastmoney.com/FundMApi/FundRankNewList.ashx',
       method: 'GET',
-      header: { Referer: 'https://fund.eastmoney.com/data/fundranking.html' },
-      data: { op: 'ph', dt: 'kf', ft, rs: '', gs: 0, sc, st: 'desc', pi: 1, pn, dx: 1, _: Date.now() },
+      data: {
+        FundType: 'all', SortColumn: col, Sort: 'desc', pageIndex: 1, pageSize: pn,
+        deviceid: 'wx', plat: 'Iphone', product: 'EFund', version: '6.5.5', appType: 'ttjj', _: Date.now()
+      },
       success: (res: any) => {
         try {
-          const text = String(res.data || '');
-          const m = text.match(/datas:(\[[\s\S]*?\])/);
-          if (!m) { resolve([]); return; }
-          const arr: string[] = JSON.parse(m[1]);
-          const idx = RANK_SC_INDEX[sc] != null ? RANK_SC_INDEX[sc] : 11;
-          const out = arr
-            .map((s) => {
-              const p = s.split(',');
-              return { code: p[0], name: p[1], nav: parseFloat(p[4]) || 0, ret: parseFloat(p[idx]) || 0 };
-            })
-            .filter((x) => /^\d{6}$/.test(x.code));
-          resolve(out);
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const list = (p && p.Datas) || [];
+          resolve(
+            list
+              .filter((d: any) => d && /^\d{6}$/.test(d.FCODE))
+              .map((d: any) => ({
+                code: d.FCODE, name: d.SHORTNAME || d.FCODE,
+                nav: parseFloat(d.DWJZ) || 0, ret: parseFloat(d[col]) || 0
+              }))
+          );
         } catch (e) {
           resolve([]);
         }

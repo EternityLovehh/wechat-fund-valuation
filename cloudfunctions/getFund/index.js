@@ -55,7 +55,38 @@ async function loadNav(codes) {
   return map;
 }
 
+// 基金排行：web rankhandler 需东财 Referer(小程序端设不了)，故经云函数中转。
+// sc→CSV 列索引：日6 / 周7 / 月8 / 3月9 / 6月10 / 1年11 / 今年14；code0 name1 nav4
+const RANK_SC_INDEX = { rzf: 6, '1yzf': 8, '3yzf': 9, '1nzf': 11, jnzf: 14 };
+async function loadRank(ft, sc, pn) {
+  const url =
+    'https://fund.eastmoney.com/data/rankhandler.aspx' +
+    `?op=ph&dt=kf&ft=${ft}&rs=&gs=0&sc=${sc}&st=desc&pi=1&pn=${pn}&dx=1`;
+  const r = await httpGet(url, { Referer: 'https://fund.eastmoney.com/data/fundranking.html' });
+  const m = String(r.body || '').match(/datas:(\[[\s\S]*?\])/);
+  if (!m) return [];
+  const arr = JSON.parse(m[1]);
+  const idx = RANK_SC_INDEX[sc] != null ? RANK_SC_INDEX[sc] : 11;
+  return arr
+    .map((s) => {
+      const p = String(s).split(',');
+      return { code: p[0], name: p[1], nav: parseFloat(p[4]) || 0, ret: parseFloat(p[idx]) || 0 };
+    })
+    .filter((x) => /^\d{6}$/.test(x.code));
+}
+
 exports.main = async (event) => {
+  // 排行模式
+  if (event.rank) {
+    try {
+      const { ft, sc, pn } = event.rank;
+      const list = await loadRank(ft || 'all', sc || '1nzf', pn || 30);
+      return { success: true, rank: list };
+    } catch (e) {
+      return { success: false, error: (e && e.message) || String(e) };
+    }
+  }
+
   const raw = Array.isArray(event.codes) ? event.codes : event.code ? [event.code] : [];
   const valid = Array.from(new Set(raw.filter((c) => /^\d{6}$/.test(c))));
   if (valid.length === 0) return { success: false, error: '无有效基金代码' };
