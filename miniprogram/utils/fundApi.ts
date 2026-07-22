@@ -574,7 +574,9 @@ function getStockBoard(code: string): Promise<string> {
   const secid = `${code.startsWith('6') || code.startsWith('9') ? '1' : '0'}.${code}`;
   return new Promise((resolve) => {
     wx.request({
-      url: 'https://push2.eastmoney.com/api/qt/stock/get',
+      // 用 push2delay(延迟行情主机)取所属板块 f127：板块归属是静态的,延迟无所谓,
+      // 但它比实时 push2 稳定得多(push2 经常 502)。
+      url: 'https://push2delay.eastmoney.com/api/qt/stock/get',
       method: 'GET',
       data: { secid, fields: 'f127', _: Date.now() },
       success: (res: any) => {

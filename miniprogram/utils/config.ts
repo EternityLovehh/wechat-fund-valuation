@@ -19,6 +19,7 @@ export const REQUEST_DOMAINS = [
   'https://api.fund.eastmoney.com',   // 历史净值 lsjz
   'https://fund.eastmoney.com',       // 搜索列表 / 持仓明细 pingzhongdata
   'https://push2.eastmoney.com',      // 持仓股票实时行情
+  'https://push2delay.eastmoney.com', // 个股所属板块 f127(延迟行情,更稳)
   'https://qt.gtimg.cn',              // 大盘指数 / 个股行情
   'https://newsapi.eastmoney.com'    // 市场要闻(财经快讯)
 ];
