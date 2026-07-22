@@ -47,7 +47,7 @@ function beijingNow() {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 
-exports.main = async () => {
+exports.main = async (event = {}) => {
   // 仅工作日执行(周末跳过;节假日未精确排除,靠 quota/估值兜底)
   const bjDay = new Date(Date.now() + 8 * 3600 * 1000).getUTCDay();
   if (bjDay === 0 || bjDay === 6) return { skipped: 'weekend' };
