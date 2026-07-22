@@ -1,6 +1,15 @@
 // mine.ts - 「我的」聚合页：分析/工具/数据入口
 import { clearHistoryData } from '../../utils/history'
 
+// 随机好听的默认昵称（首次进入生成并保存，保持稳定）
+const NICK_ADJ = ['稳健', '从容', '长期', '价值', '理性', '佛系', '淡定', '乐观', '聪明', '勤劳', '复利', '元气', '招财', '常胜', '踏实'];
+const NICK_NOUN = ['养基人', '投资家', '定投君', '理财师', '持有人', '小基民', '布局家', '收益官', '行者', '船长'];
+function randomNickname(): string {
+  const a = NICK_ADJ[Math.floor(Math.random() * NICK_ADJ.length)];
+  const n = NICK_NOUN[Math.floor(Math.random() * NICK_NOUN.length)];
+  return a + '的' + n;
+}
+
 Page({
   data: {
     version: '1.0.0',
@@ -13,7 +22,12 @@ Page({
     let avatar = '';
     try { name = wx.getStorageSync('mine_nickname'); } catch (e) { /* ignore */ }
     try { avatar = wx.getStorageSync('mine_avatar'); } catch (e) { /* ignore */ }
-    this.setData({ nickname: name || '基金投资者', avatarUrl: avatar || '' });
+    // 首次无昵称：生成一个随机好听的名字并保存，保持稳定
+    if (!name) {
+      name = randomNickname();
+      try { wx.setStorageSync('mine_nickname', name); } catch (e) { /* ignore */ }
+    }
+    this.setData({ nickname: name, avatarUrl: avatar || '' });
   },
 
   // 微信头像选择（open-type=chooseAvatar）；存到本地持久路径
@@ -44,7 +58,7 @@ Page({
       placeholderText: '输入昵称',
       success: (r: any) => {
         if (r.confirm) {
-          const name = String(r.content || '').trim() || '基金投资者';
+          const name = String(r.content || '').trim() || randomNickname();
           this.setData({ nickname: name });
           try { wx.setStorageSync('mine_nickname', name); } catch (e) { /* ignore */ }
         }
