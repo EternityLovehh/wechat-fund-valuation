@@ -5,6 +5,7 @@ import { getPortfolioHistory, PortfolioSnapshot, getEstimateAccuracySummary, Est
 import { getTodayStr } from '../../utils/appDate'
 
 interface DayCell {
+  id: number;          // wx:key 用
   day: number;         // 1-31；0 表示占位空格
   date: string;        // YYYY-MM-DD
   profit: number;      // 当日收益
@@ -49,7 +50,7 @@ Page({
       hasAcc: s.count > 0,
       accCount: s.count,
       accAvgErr: s.avgErr,
-      accRecords: s.records
+      accRecords: s.records.map((r, i) => ({ ...r, id: i }))
     });
   },
 
@@ -140,7 +141,7 @@ Page({
     const cells: DayCell[] = [];
     // 月初前置空格
     for (let i = 0; i < firstWeekday; i++) {
-      cells.push({ day: 0, date: '', profit: 0, hasData: false, isToday: false });
+      cells.push({ id: cells.length, day: 0, date: '', profit: 0, hasData: false, isToday: false });
     }
     let monthProfit = 0;
     let win = 0;
@@ -154,7 +155,7 @@ Page({
         if (profit > 0) win++;
         else if (profit < 0) lose++;
       }
-      cells.push({ day: d, date, profit, hasData, isToday: date === todayStr });
+      cells.push({ id: cells.length, day: d, date, profit, hasData, isToday: date === todayStr });
     }
 
     // 当前(真实)年月，用于禁止翻到未来

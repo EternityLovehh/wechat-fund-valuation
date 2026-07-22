@@ -31,32 +31,32 @@ module.exports = { fmt: fmt, fmt2: fmt2 }
     <view class="ms-center">
       <view class="ms-label">{{monthLabel}}</view>
       <view class="ms-profit {{monthProfit >= 0 ? 'positive' : 'negative'}}">
-        本月估算收益 {{u.fmt(monthProfit)}}
+        本月收益 {{u.fmt(monthProfit)}}
       </view>
       <view class="ms-days">盈 {{monthWinDays}} 天 · 亏 {{monthLoseDays}} 天</view>
     </view>
     <view class="ms-nav {{canGoNext ? '' : 'disabled'}}" bindtap="nextMonth">›</view>
   </view>
 
-  <!-- 星期表头 -->
-  <view class="week-heads">
-    <view wx:for="{{weekHeads}}" wx:key="*this" class="wh">{{item}}</view>
-  </view>
-
-  <!-- 日历格子 -->
-  <view class="grid">
-    <view
-      wx:for="{{cells}}"
-      wx:key="index"
-      class="cell {{item.day === 0 ? 'blank' : ''}} {{item.isToday ? 'today' : ''}}"
-    >
-      <block wx:if="{{item.day !== 0}}">
-        <view class="cell-day">{{item.day}}</view>
-        <view wx:if="{{item.hasData}}" class="cell-profit {{item.profit >= 0 ? 'positive' : 'negative'}}">
-          {{u.fmt(item.profit)}}
-        </view>
-        <view wx:else class="cell-empty">-</view>
-      </block>
+  <!-- 日历卡片(星期表头 + 格子) -->
+  <view class="calendar-card">
+    <view class="week-heads">
+      <view wx:for="{{weekHeads}}" wx:key="*this" class="wh">{{item}}</view>
+    </view>
+    <view class="grid">
+      <view
+        wx:for="{{cells}}"
+        wx:key="id"
+        class="cell {{item.day === 0 ? 'blank' : ''}} {{item.isToday ? 'today' : ''}}"
+      >
+        <block wx:if="{{item.day !== 0}}">
+          <view class="cell-day">{{item.day}}</view>
+          <view wx:if="{{item.hasData}}" class="cell-profit {{item.profit >= 0 ? 'positive' : 'negative'}}">
+            {{u.fmt(item.profit)}}
+          </view>
+          <view wx:else class="cell-empty">-</view>
+        </block>
+      </view>
     </view>
   </view>
 
@@ -76,7 +76,7 @@ module.exports = { fmt: fmt, fmt2: fmt2 }
         <text class="ac-cell">实际</text>
         <text class="ac-cell">偏差</text>
       </view>
-      <view wx:for="{{accRecords}}" wx:key="index" class="acc-row">
+      <view wx:for="{{accRecords}}" wx:key="id" class="acc-row">
         <text class="ac-code">{{item.code}}</text>
         <text class="ac-cell">{{item.date}}</text>
         <text class="ac-cell">{{u.fmt(item.est)}}%</text>

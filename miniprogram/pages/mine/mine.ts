@@ -3,7 +3,30 @@ import { clearHistoryData } from '../../utils/history'
 
 Page({
   data: {
-    version: '1.0.0'
+    version: '1.0.0',
+    nickname: '基金投资者'
+  },
+
+  onShow() {
+    let name = '';
+    try { name = wx.getStorageSync('mine_nickname'); } catch (e) { /* ignore */ }
+    this.setData({ nickname: name || '基金投资者' });
+  },
+
+  editName() {
+    wx.showModal({
+      title: '修改昵称',
+      editable: true,
+      content: this.data.nickname,
+      placeholderText: '输入昵称',
+      success: (r: any) => {
+        if (r.confirm) {
+          const name = String(r.content || '').trim() || '基金投资者';
+          this.setData({ nickname: name });
+          try { wx.setStorageSync('mine_nickname', name); } catch (e) { /* ignore */ }
+        }
+      }
+    });
   },
 
   goCalendar() {

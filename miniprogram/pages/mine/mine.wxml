@@ -1,8 +1,11 @@
 <!--mine.wxml - 我的（聚合入口）-->
 <view class="container">
-  <view class="mine-header">
-    <view class="mine-title">基金估值助手</view>
-    <view class="mine-sub">v{{version}}</view>
+  <view class="mine-header" bindtap="editName">
+    <view class="avatar">📈</view>
+    <view class="p-info">
+      <text class="p-name">{{nickname}}</text>
+      <text class="p-sub">点击修改昵称 ✎</text>
+    </view>
   </view>
 
   <view class="group">
@@ -52,5 +55,8 @@
     </view>
   </view>
 
-  <view class="mine-footer">数据来源：东方财富 / 腾讯财经，仅供参考，不构成投资建议</view>
+  <view class="mine-footer">
+    <text class="mf-app">基金估值助手 v{{version}}</text>
+    <text class="mf-sub">数据来源：东方财富 / 腾讯财经，仅供参考，不构成投资建议</text>
+  </view>
 </view>
