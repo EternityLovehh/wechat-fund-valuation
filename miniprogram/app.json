@@ -10,7 +10,8 @@
     "pages/penetration/penetration",
     "pages/compare/compare",
     "pages/rank/rank",
-    "pages/calc/calc"
+    "pages/calc/calc",
+    "pages/news/news"
   ],
   "window": {
     "navigationBarTextStyle": "white",

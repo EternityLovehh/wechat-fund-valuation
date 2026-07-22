@@ -21,6 +21,9 @@ Page({
   goCalc() {
     wx.navigateTo({ url: '/pages/calc/calc' });
   },
+  goNews() {
+    wx.navigateTo({ url: '/pages/news/news' });
+  },
 
   clearData() {
     wx.showModal({

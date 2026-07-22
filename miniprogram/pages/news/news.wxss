@@ -1,0 +1,9 @@
+/* news.wxss */
+.container { height: 100vh; background: #f5f6fa; box-sizing: border-box; }
+.empty { text-align: center; color: #999; padding: 120rpx 0; font-size: 26rpx; }
+.list { padding: 20rpx 24rpx 40rpx; }
+.news { background: #fff; border-radius: 14rpx; padding: 24rpx; margin-bottom: 16rpx; }
+.n-title { font-size: 28rpx; color: #222; line-height: 1.5; font-weight: 500; }
+.n-digest { font-size: 24rpx; color: #888; line-height: 1.6; margin-top: 10rpx; }
+.n-time { font-size: 22rpx; color: #bbb; margin-top: 12rpx; }
+.foot { text-align: center; font-size: 22rpx; color: #bbb; padding: 20rpx 0; }

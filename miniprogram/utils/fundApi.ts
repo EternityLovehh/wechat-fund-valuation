@@ -403,6 +403,35 @@ export function getFundBaseInfo(code: string): Promise<FundBaseInfo | null> {
   });
 }
 
+// 财经快讯（东财 newsapi，内联展示标题/摘要/时间，不外链）
+export interface NewsItem { title: string; digest: string; time: string }
+export function getMarketNews(pageSize: number = 30): Promise<NewsItem[]> {
+  return new Promise((resolve) => {
+    wx.request({
+      url: `https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_${pageSize}_1_.html`,
+      method: 'GET',
+      header: { Referer: 'https://kuaixun.eastmoney.com/' },
+      success: (res: any) => {
+        try {
+          let text = String(res.data || '').trim();
+          text = text.replace(/^var\s+ajaxResult\s*=\s*/, '').replace(/;\s*$/, '');
+          const p = JSON.parse(text);
+          const list = (p && p.LivesList) || [];
+          const out: NewsItem[] = list.map((d: any) => ({
+            title: String(d.title || '').trim(),
+            digest: String(d.digest || '').trim(),
+            time: String(d.showtime || d.showTime || '').trim()
+          })).filter((n: NewsItem) => n.title);
+          resolve(out);
+        } catch (e) {
+          resolve([]);
+        }
+      },
+      fail: () => resolve([])
+    });
+  });
+}
+
 // 基金排行（东财 rankhandler，CSV 字段按位取）
 export interface RankItem { code: string; name: string; nav: number; ret: number }
 const RANK_SC_INDEX: Record<string, number> = { rzf: 6, '1yzf': 8, '3yzf': 9, '1nzf': 11, jnzf: 14 };

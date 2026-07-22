@@ -1,0 +1,17 @@
+<!--news.wxml - 市场要闻-->
+<scroll-view scroll-y class="container" refresher-enabled refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresh">
+  <view wx:if="{{loading}}" class="skeleton">
+    <view class="sk-row" wx:for="{{[1,2,3,4,5,6]}}" wx:key="*this"><view class="sk-line sk-w60"></view></view>
+  </view>
+
+  <view wx:elif="{{list.length === 0}}" class="empty">暂无资讯，下拉重试</view>
+
+  <view wx:else class="list">
+    <view wx:for="{{list}}" wx:key="index" class="news">
+      <view class="n-title">{{item.title}}</view>
+      <view wx:if="{{item.digest}}" class="n-digest">{{item.digest}}</view>
+      <view class="n-time">{{item.time}}</view>
+    </view>
+    <view class="foot">仅展示市场财经快讯，不构成投资建议</view>
+  </view>
+</scroll-view>
