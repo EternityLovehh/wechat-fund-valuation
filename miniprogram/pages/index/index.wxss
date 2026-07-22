@@ -388,3 +388,6 @@ page {
 /* 关联板块列 */
 .c-board { width: 160rpx; }
 .board-name { color: #555; font-size: 22rpx; max-width: 152rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.c { white-space: nowrap; } /* col: 防百分比换行错位 */
+.trow { min-height: 96rpx; }
