@@ -1,6 +1,6 @@
 // 基金API工具类 - 接入真实数据
 import { isMarketHoliday } from './tradingCalendar'
-import { recordEstimateForecast, recordEstimateActual } from './history'
+import { recordEstimateBatch } from './history'
 import { getTodayStr } from './appDate'
 
 export interface FundInfo {
@@ -16,6 +16,8 @@ export interface FundInfo {
   // 估值来源：official=官方实时估值 gsz；navchg=收盘后按已确认净值涨跌；
   //          computed=前十大重仓自算（近似）；none=无估值（仅净值）
   estimateSource?: 'official' | 'navchg' | 'computed' | 'none';
+  // 已确认净值涨跌率（NAVCHGRT，%）——对应 valuationDate 那天的真实涨跌，用于估值准确度对比
+  navChgRt?: number;
 }
 
 // 市场交易时段状态
@@ -151,7 +153,8 @@ function mapFundDatum(d: any): FundInfo {
     // 真实估值时间戳，缺失时返回空串（不回落到本地时间，避免显示与数据脱钩的假时间）
     updateTime: gztime,
     valuationDate: pdate,
-    estimateSource
+    estimateSource,
+    navChgRt: isNaN(navchgrt) ? undefined : navchgrt
   };
 }
 
@@ -210,7 +213,8 @@ function mapCloudDatum(d: any): FundInfo {
     dayGrowth: estimatedGrowth,
     updateTime: d.updateTime || '',
     valuationDate: d.valuationDate || '',
-    estimateSource: d.estimateSource || d.source || 'none'
+    estimateSource: d.estimateSource || d.source || 'none',
+    navChgRt: Number.isFinite(Number(d.navChgRt)) ? Number(d.navChgRt) : undefined
   };
 }
 
@@ -250,7 +254,10 @@ async function getBaseViaDirect(valid: string[]): Promise<FundInfo[]> {
 //   1) 云函数优先 → 东财官方估值排行 GetFundGZList（含官方 gsz，最准；AkShare 同源）
 //   2) 云函数不可用 → 直连 fundmobapi（仅净值）
 //   3) 仍无官方估值(source==='none')的基金 → 前十大重仓自算兜底（全覆盖）
-export async function getBatchFundEstimate(codes: string[]): Promise<FundInfo[]> {
+export async function getBatchFundEstimate(
+  codes: string[],
+  opts?: { recordAccuracy?: boolean }
+): Promise<FundInfo[]> {
   const valid = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
   if (valid.length === 0) return [];
 
@@ -278,15 +285,21 @@ export async function getBatchFundEstimate(codes: string[]): Promise<FundInfo[]>
     }
   }
 
-  // 采集估值准确度数据（向前累积）：
-  //   已公布净值(navchg) → 记该净值日的实际涨跌；否则(official/computed) → 记当日估算涨跌
-  const today = getTodayStr();
-  for (const f of out) {
-    if (f.estimateSource === 'navchg' && f.valuationDate) {
-      recordEstimateActual(f.code, f.valuationDate, f.estimatedGrowth);
-    } else if (f.estimateSource === 'official' || f.estimateSource === 'computed') {
-      recordEstimateForecast(f.code, today, f.estimatedGrowth);
+  // 采集估值准确度（仅自选/持仓页传 recordAccuracy=true，避免搜索/详情/导入污染并挤占存储）。
+  // 一次批量读写：① 已确认净值涨跌率(navChgRt) → 记为对应净值日的"实际"(不论估值来源);
+  //             ② 净值日<今天 且有估值 → 记为"今天"的"估算"。二者按同一(code,date)最终配对对比。
+  if (opts && opts.recordAccuracy) {
+    const today = getTodayStr();
+    const records: Array<{ code: string; date: string; est?: number; actual?: number }> = [];
+    for (const f of out) {
+      if (f.valuationDate && Number.isFinite(f.navChgRt as number)) {
+        records.push({ code: f.code, date: f.valuationDate, actual: f.navChgRt as number });
+      }
+      if ((f.estimateSource === 'official' || f.estimateSource === 'computed') && f.valuationDate && f.valuationDate < today) {
+        records.push({ code: f.code, date: today, est: f.estimatedGrowth });
+      }
     }
+    if (records.length) recordEstimateBatch(records);
   }
 
   return out;
@@ -825,9 +838,21 @@ export async function getNetValueByDate(code: string, date: string): Promise<num
   });
 }
 
-// 获取基金近一年涨幅
+// 近一年涨幅缓存：pingzhongdata 是大文件且该值日内不变，缓存 6 小时，避免 30s 自动刷新反复拉取
+const yearGrowthCache = new Map<string, { ts: number; val: number }>();
+const YEAR_GROWTH_TTL = 6 * 60 * 60 * 1000;
+
+// 获取基金近一年涨幅（带缓存）
 export async function getFundYearGrowth(code: string): Promise<number> {
-  return new Promise((resolve, reject) => {
+  const cached = yearGrowthCache.get(code);
+  if (cached && Date.now() - cached.ts < YEAR_GROWTH_TTL) {
+    return cached.val;
+  }
+  return new Promise((resolve) => {
+    const done = (v: number) => {
+      yearGrowthCache.set(code, { ts: Date.now(), val: v });
+      resolve(v);
+    };
     wx.request({
       url: `https://fund.eastmoney.com/pingzhongdata/${code}.js`,
       method: 'GET',
@@ -837,27 +862,25 @@ export async function getFundYearGrowth(code: string): Promise<number> {
           // 提取近一年收益率
           const yearGrowthMatch = text.match(/Data_rateInSimilarPersent\s*=\s*"([^"]+)"/);
           if (yearGrowthMatch) {
-            const growthStr = yearGrowthMatch[1];
-            const growthValue = parseFloat(growthStr);
-            resolve(isNaN(growthValue) ? 0 : growthValue);
+            const growthValue = parseFloat(yearGrowthMatch[1]);
+            done(isNaN(growthValue) ? 0 : growthValue);
           } else {
-            // 尝试其他可能的字段
             const altMatch = text.match(/syl_1n\s*=\s*"([^"]+)"/);
             if (altMatch) {
               const growthValue = parseFloat(altMatch[1]);
-              resolve(isNaN(growthValue) ? 0 : growthValue);
+              done(isNaN(growthValue) ? 0 : growthValue);
             } else {
-              resolve(0);
+              done(0);
             }
           }
         } catch (e) {
           console.error('解析近一年涨幅失败:', e);
-          resolve(0);
+          resolve(0); // 解析异常不写缓存，下次可重试
         }
       },
       fail: (err) => {
         console.error('获取近一年涨幅失败:', err);
-        resolve(0);
+        resolve(0); // 失败不写缓存
       }
     });
   });

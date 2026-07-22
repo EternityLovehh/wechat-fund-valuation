@@ -75,7 +75,8 @@ Page({
   async loadFunds() {
     // 并发守卫：onShow / 30s 自动刷新 / 下拉刷新可能重叠，只让最新一次结果落地
     const seq = ++this.loadSeq;
-    this.setData({ loading: true });
+    // 仅首次（列表为空）显示骨架屏，避免每次自动刷新都闪一下
+    this.setData({ loading: this.data.funds.length === 0 });
     const optionalFunds = getOptionalFunds();
     const manualHoldings = getHoldingFunds();
     const importedHoldings = getImportedHoldings();
@@ -88,7 +89,7 @@ Page({
     try {
       // 只取标准 6 位数字代码（自动排除 NAME_ 临时码/非标准码），一次批量拉取全部估值
       const codes = optionalFunds.map(f => f.code).filter(code => /^\d{6}$/.test(code));
-      const estimates = await getBatchFundEstimate(codes);
+      const estimates = await getBatchFundEstimate(codes, { recordAccuracy: true });
       const estMap = new Map(estimates.map(e => [e.code, e]));
 
       // 近一年涨幅是独立接口、无法批量，对已拿到估值的基金并发拉取（失败不影响主流程）

@@ -1,5 +1,6 @@
 // 云函数(定时触发)：检查基金涨跌是否达到用户设定阈值，命中则发订阅消息。
-// 触发器建议：交易时段每 5 分钟(见 config.json)。一次订阅授权只能发一条，发后 quota-1。
+// 触发器：交易时段每 30 分钟(见 config.json)。一次订阅授权只能发一条，发后 quota-1。
+// 当日去重：同一订阅每天最多推一次(lastSentDate)，避免阈值持续满足时反复推送。
 const cloud = require('wx-server-sdk');
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -60,8 +61,10 @@ exports.main = async () => {
   }
 
   const time = beijingNow();
+  const today = time.slice(0, 10); // 北京日期 YYYY-MM-DD
   let sent = 0;
   for (const a of alerts.data) {
+    if (a.lastSentDate === today) continue; // 当日已推送过，去重
     const est = gz.map[a.code];
     if (!est || est.gszzl == null) continue;
     const g = est.gszzl; // 当日估算涨跌 %
@@ -83,7 +86,7 @@ exports.main = async () => {
           thing10: { value: hitUp ? '涨幅达到提醒线' : '跌幅达到提醒线' }
         }
       });
-      await db.collection('fund_alerts').doc(a._id).update({ data: { quota: _.inc(-1), lastSentAt: Date.now() } });
+      await db.collection('fund_alerts').doc(a._id).update({ data: { quota: _.inc(-1), lastSentAt: Date.now(), lastSentDate: today } });
       sent++;
     } catch (e) {
       // 单条失败不影响其他

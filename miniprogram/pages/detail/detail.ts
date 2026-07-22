@@ -52,7 +52,6 @@ Page({
   },
 
   onLoad(options: any) {
-    this.setData({ chartTs: Date.now() });
     console.log('Detail页面加载，参数:', options);
     const { code, from } = options;
     
@@ -75,7 +74,7 @@ Page({
   },
 
   async loadFundDetail() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, chartTs: Date.now() }); // 每次加载/下拉刷新都刷新估值分时图
     try {
       const fund = await getFundEstimate(this.data.code);
       

@@ -116,6 +116,7 @@ module.exports = {
               </block>
               <block wx:else>-</block>
               <text class="est-tag" wx:if="{{item.estimateSource === 'computed'}}">自算</text>
+              <text class="est-tag est-tag-nav" wx:elif="{{item.estimateSource === 'none'}}">净值</text>
             </view>
             <view class="profit-amount {{item.todayProfit >= 0 ? 'positive' : 'negative'}}">
               {{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}

@@ -336,3 +336,5 @@ page {
   color: #bbb;
   margin-top: 4rpx;
 }
+
+.est-tag-nav { color: #999; border-color: #ddd; background: #f5f5f5; }

@@ -79,6 +79,9 @@ exports.main = async (event) => {
     const o = gz.map[code];
     const nav = navMap[code] || {};
     const netValue = parseFloat(nav.NAV != null ? nav.NAV : o && o.dwjz) || 0;
+    const pdate = nav.PDATE && nav.PDATE !== '--' ? nav.PDATE : '';
+    const navChg = parseFloat(nav.NAVCHGRT); // 已确认净值涨跌率（对应 pdate），供准确度对比
+    const navChgRt = isNaN(navChg) ? null : navChg;
 
     if (o && o.gsz && o.gsz !== '---' && o.gsz !== '') {
       // 官方实时估值（最准）
@@ -90,12 +93,13 @@ exports.main = async (event) => {
         netValue,
         estimatedValue: gsz,
         estimatedGrowth: gszzl,
-        updateTime: gz.gzrq || '',
-        valuationDate: (nav.PDATE && nav.PDATE !== '--' ? nav.PDATE : '') || '',
-        source: 'official'
+        updateTime: nav.GZTIME || '', // 用估值时间戳(HH:mm)，不用 gzrq 日期，避免状态栏把日期当时间
+        valuationDate: pdate,
+        source: 'official',
+        navChgRt
       });
       officialCount++;
-    } else if (nav.PDATE && nav.PDATE !== '--' && nav.GZTIME && nav.PDATE === String(nav.GZTIME).substr(0, 10)) {
+    } else if (pdate && nav.GZTIME && pdate === String(nav.GZTIME).substr(0, 10)) {
       // 当日净值已公布：用净值 + 净值涨跌率
       const chg = parseFloat(nav.NAVCHGRT);
       data.push({
@@ -105,8 +109,9 @@ exports.main = async (event) => {
         estimatedValue: netValue,
         estimatedGrowth: isNaN(chg) ? 0 : chg,
         updateTime: nav.GZTIME || '',
-        valuationDate: nav.PDATE,
-        source: 'navchg'
+        valuationDate: pdate,
+        source: 'navchg',
+        navChgRt
       });
     } else {
       // 官方无估值、当日净值未出 → 交给客户端自算
@@ -117,8 +122,9 @@ exports.main = async (event) => {
         estimatedValue: netValue,
         estimatedGrowth: 0,
         updateTime: nav.GZTIME || '',
-        valuationDate: nav.PDATE && nav.PDATE !== '--' ? nav.PDATE : '',
-        source: 'none'
+        valuationDate: pdate,
+        source: 'none',
+        navChgRt
       });
     }
   }

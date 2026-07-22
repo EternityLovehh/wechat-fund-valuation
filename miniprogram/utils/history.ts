@@ -106,6 +106,34 @@ export function recordEstimateActual(code: string, date: string, actual: number)
   upsertAccuracy(code, date, { actual });
 }
 
+// 批量 upsert：一次读 + 内存合并 + 一次写（避免每只基金全量读写）。
+// est/actual 分别按 (code,date) 合并，不覆盖对方已有值。
+export function recordEstimateBatch(
+  records: Array<{ code: string; date: string; est?: number; actual?: number }>
+): void {
+  if (!records || !records.length) return;
+  try {
+    const list = getEstimateAccuracyAll();
+    const index = new Map<string, EstimateAccuracy>();
+    for (const r of list) index.set(`${r.code}_${r.date}`, r);
+    for (const rec of records) {
+      if (!rec.code || !rec.date) continue;
+      const key = `${rec.code}_${rec.date}`;
+      let item = index.get(key);
+      if (!item) {
+        item = { code: rec.code, date: rec.date, est: null, actual: null };
+        index.set(key, item);
+        list.push(item);
+      }
+      if (rec.est != null && Number.isFinite(rec.est)) item.est = rec.est;
+      if (rec.actual != null && Number.isFinite(rec.actual)) item.actual = rec.actual;
+    }
+    saveEstimateAccuracy(list); // 排序 + 截断 + 一次写
+  } catch (e) {
+    // 忽略：记录失败不影响页面
+  }
+}
+
 // 取某只基金近 N 条"估算与实际都齐全"的对比（最新在前），用于展示准确度
 export function getEstimateAccuracy(code: string, limit: number = 10): EstimateAccuracy[] {
   return getEstimateAccuracyAll()

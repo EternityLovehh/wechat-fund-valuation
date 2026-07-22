@@ -3,6 +3,7 @@ import { getBatchFundEstimate, FundInfo, getNetValueByDate, getFundType, isMarke
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
 import { normalizeHolding, settlePendingAdds, computeImportedDisplay, computePortfolioDiagnosis, PortfolioDiagnosis } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
+import { isTradingDay } from '../../utils/tradingCalendar'
 import { recordPortfolioSnapshot } from '../../utils/history'
 
 interface HoldingDisplay extends HoldingFund {
@@ -156,7 +157,7 @@ Page({
         ...holdingFunds.map(h => h.code),
         ...importedHoldings.map(h => h.code)
       ];
-      const estimates = await getBatchFundEstimate(allCodes);
+      const estimates = await getBatchFundEstimate(allCodes, { recordAccuracy: true });
       const estMap = new Map<string, FundInfo>(estimates.map(e => [e.code, e]));
 
       // ===== 手动持仓 =====
@@ -382,8 +383,8 @@ Page({
         }))
       );
 
-      // 记录当日资产快照（供总资产走势/收益日历）；仅在有持仓时记录
-      if (allHoldings.length > 0 && totalValue > 0) {
+      // 记录当日资产快照（供总资产走势/收益日历）；仅交易日、且有持仓时记录，避免周末/节假日产生幽灵当日收益
+      if (allHoldings.length > 0 && totalValue > 0 && isTradingDay(new Date())) {
         recordPortfolioSnapshot({
           totalValue: Number(totalValue) || 0,
           totalCost: Number(totalCost) || 0,
