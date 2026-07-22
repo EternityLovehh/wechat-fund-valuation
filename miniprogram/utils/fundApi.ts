@@ -309,8 +309,9 @@ export async function getBatchFundEstimate(
 // 社区通行做法：基金前十大重仓股(占净值比 JZBL) × 个股实时涨跌%，归一化到已披露仓位得到估算涨跌。
 // 注意：仅覆盖披露的前十大重仓（股票型基金约占净值 50-70%），是近似值，非官方精确估值。
 
-interface WeightedHolding {
+export interface WeightedHolding {
   code: string;
+  name: string;   // 股票简称
   weight: number; // 占净值比 %
 }
 
@@ -352,8 +353,39 @@ function getFundStockRatio(code: string): Promise<number | null> {
   });
 }
 
-// 取某基金前十大重仓（代码 + 占净值比），带缓存
-function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
+// 行业配置缓存（季度披露）
+const sectorCache = new Map<string, { ts: number; sectors: Array<{ name: string; ratio: number }> }>();
+
+// 取某基金行业配置（HYMC 行业名 + ZJZBL 占净值比%），带缓存
+export function getFundSectorAllocation(code: string): Promise<Array<{ name: string; ratio: number }>> {
+  const cached = sectorCache.get(code);
+  if (cached && Date.now() - cached.ts < HOLDINGS_TTL) return Promise.resolve(cached.sectors);
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNSectorAllocation',
+      method: 'GET',
+      data: { FCODE: code, deviceid: 'wx', plat: 'Android', product: 'EFund', version: '1', _: Date.now() },
+      success: (res: any) => {
+        try {
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const list = (p && p.Datas) || [];
+          const sectors = list
+            .map((d: any) => ({ name: String(d.HYMC || '').trim(), ratio: parseFloat(d.ZJZBL) || 0 }))
+            .filter((s: any) => s.name && s.ratio > 0);
+          sectorCache.set(code, { ts: Date.now(), sectors });
+          resolve(sectors);
+        } catch (e) {
+          resolve([]);
+        }
+      },
+      fail: () => resolve([])
+    });
+  });
+}
+
+// 取某基金前十大重仓（代码 + 简称 + 占净值比），带缓存
+export function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
   const cached = holdingsCache.get(code);
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
     return Promise.resolve(cached.holdings);
@@ -373,7 +405,9 @@ function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
             const c = String(s.GPDM || '').trim();
             const w = parseFloat(s.JZBL);
             // 仅取 A 股 6 位代码（港股/美股 push2 行情口径不同，跳过并归一化到 A 股部分）
-            if (/^\d{6}$/.test(c) && !isNaN(w) && w > 0) holdings.push({ code: c, weight: w });
+            if (/^\d{6}$/.test(c) && !isNaN(w) && w > 0) {
+              holdings.push({ code: c, name: String(s.GPJC || '').trim(), weight: w });
+            }
           }
           holdingsCache.set(code, { ts: Date.now(), holdings });
           resolve(holdings);
@@ -472,7 +506,7 @@ function fetchPush2Changes(codes: string[]): Promise<Map<string, number>> {
 }
 
 // 个股实时涨跌%：腾讯主源 + push2 兜底；20s 短缓存复用；某轮全失败时保留上次值，估值不闪没。
-async function getBatchStockChangeMap(codes: string[]): Promise<Map<string, number>> {
+export async function getBatchStockChangeMap(codes: string[]): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   const uniq = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
   if (uniq.length === 0) return map;

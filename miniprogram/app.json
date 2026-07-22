@@ -6,7 +6,8 @@
     "pages/detail/detail",
     "pages/import/import",
     "pages/calendar/calendar",
-    "pages/mine/mine"
+    "pages/mine/mine",
+    "pages/penetration/penetration"
   ],
   "window": {
     "navigationBarTextStyle": "white",

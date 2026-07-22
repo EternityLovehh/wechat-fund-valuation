@@ -1,0 +1,62 @@
+<!--penetration.wxml - 持仓穿透-->
+<wxs module="u">
+var pct = function(v){ var n=parseFloat(v); return isNaN(n)?'0':n.toFixed(1); }
+var chg = function(v){ var n=parseFloat(v); if(isNaN(n))return '--'; return (n>=0?'+':'')+n.toFixed(2)+'%'; }
+module.exports = { pct: pct, chg: chg }
+</wxs>
+
+<view class="container">
+  <view wx:if="{{loading}}" class="skeleton">
+    <view class="sk-row" wx:for="{{[1,2,3,4,5]}}" wx:key="*this"><view class="sk-line sk-w60"></view><view class="sk-line sk-w30"></view></view>
+  </view>
+
+  <view wx:elif="{{!hasData}}" class="empty">暂无持仓，先去持仓页添加</view>
+
+  <block wx:else>
+    <!-- 持仓诊断 -->
+    <view wx:if="{{diagnosis}}" class="card">
+      <view class="card-title">持仓诊断</view>
+      <view class="diag-stats">
+        <view class="diag-stat"><text class="ds-num">{{diagnosis.count}}</text><text class="ds-lab">持仓数</text></view>
+        <view class="diag-stat"><text class="ds-num">{{u.pct(diagnosis.top1Pct)}}%</text><text class="ds-lab">第一大</text></view>
+        <view class="diag-stat"><text class="ds-num">{{u.pct(diagnosis.top3Pct)}}%</text><text class="ds-lab">前三大</text></view>
+      </view>
+      <view class="bars">
+        <view wx:for="{{diagnosis.byType}}" wx:key="type" class="bar-row">
+          <text class="bar-name">{{item.type}}</text>
+          <view class="bar-bg"><view class="bar-fill" style="width:{{item.pct}}%"></view></view>
+          <text class="bar-pct">{{u.pct(item.pct)}}%</text>
+        </view>
+      </view>
+      <view wx:if="{{diagnosis.warnings.length > 0}}" class="warns">
+        <view wx:for="{{diagnosis.warnings}}" wx:key="*this" class="warn">⚠ {{item}}</view>
+      </view>
+    </view>
+
+    <!-- 穿透个股 -->
+    <view class="card">
+      <view class="card-title">穿透重仓个股 <text class="card-sub">覆盖 {{u.pct(stockCoverage)}}% 组合</text></view>
+      <view class="row row-head">
+        <text class="c-name">股票</text><text class="c-cell">占组合</text><text class="c-cell">今日</text>
+      </view>
+      <view wx:for="{{stocks}}" wx:key="code" class="row">
+        <view class="c-name"><text class="s-name">{{item.name}}</text><text class="s-code">{{item.code}}</text></view>
+        <text class="c-cell">{{u.pct(item.pct)}}%</text>
+        <text class="c-cell {{item.change >= 0 ? 'up' : (item.change < 0 ? 'down' : '')}}">{{u.chg(item.change)}}</text>
+      </view>
+      <view class="tip">多只基金重仓同一股票时，此处已合并——占比越高，隐性集中风险越大。仅统计披露的前十大重仓。</view>
+    </view>
+
+    <!-- 行业分布 -->
+    <view wx:if="{{sectors.length > 0}}" class="card">
+      <view class="card-title">行业分布</view>
+      <view class="bars">
+        <view wx:for="{{sectors}}" wx:key="name" class="bar-row">
+          <text class="bar-name bar-name-wide">{{item.name}}</text>
+          <view class="bar-bg"><view class="bar-fill sec" style="width:{{item.pct}}%"></view></view>
+          <text class="bar-pct">{{u.pct(item.pct)}}%</text>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>
