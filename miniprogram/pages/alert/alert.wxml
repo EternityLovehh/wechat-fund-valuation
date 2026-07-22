@@ -1,0 +1,49 @@
+<!--pages/alert/alert.wxml-->
+<view class="container">
+  <!-- 总开关 -->
+  <view class="card">
+    <view class="row row-main">
+      <view class="row-l">
+        <text class="row-title">涨跌提醒</text>
+        <text class="row-sub">对所有持仓基金生效</text>
+      </view>
+      <switch checked="{{enabled}}" color="#ff6b6b" bindchange="onToggle" disabled="{{busy}}"/>
+    </view>
+  </view>
+
+  <!-- 阈值设置 -->
+  <view class="card" wx:if="{{enabled}}">
+    <picker mode="selector" range="{{opts}}" value="{{upIdx}}" bindchange="onPickUp">
+      <view class="row">
+        <text class="row-title">涨幅提醒线</text>
+        <text class="row-val positive">≥ +{{upPct}}%<text class="row-arrow">›</text></text>
+      </view>
+    </picker>
+    <view class="divider"></view>
+    <picker mode="selector" range="{{opts}}" value="{{downIdx}}" bindchange="onPickDown">
+      <view class="row">
+        <text class="row-title">跌幅提醒线</text>
+        <text class="row-val negative">≤ -{{downPct}}%<text class="row-arrow">›</text></text>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 今日额度续订 -->
+  <view class="card" wx:if="{{enabled}}">
+    <view class="row row-main" bindtap="onRenew">
+      <view class="row-l">
+        <text class="row-title">{{renewedToday ? '今日提醒已就绪' : '续订今日提醒'}}</text>
+        <text class="row-sub">{{renewedToday ? '交易时段命中阈值将自动推送' : '点击续订当天的推送额度(勾过「总是保持」则无弹窗)'}}</text>
+      </view>
+      <text class="renew-badge {{renewedToday ? 'ok' : ''}}">{{renewedToday ? '✓' : '续订'}}</text>
+    </view>
+  </view>
+
+  <!-- 说明 -->
+  <view class="tips">
+    <view class="tips-title">说明</view>
+    <view class="tips-item">· 每个交易日最多推送一条(取涨跌幅度最大的一只,多只命中会标注「等N只」)。</view>
+    <view class="tips-item">· 受微信订阅消息限制,一次授权只能推送一条。请在授权弹窗勾选「总是保持以上选择」,之后每天进入小程序会自动续订、不再弹窗。</view>
+    <view class="tips-item">· 阈值按当日估算涨跌判断,交易时段每 30 分钟检查一次。</view>
+  </view>
+</view>

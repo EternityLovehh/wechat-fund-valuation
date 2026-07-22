@@ -11,7 +11,8 @@
     "pages/compare/compare",
     "pages/rank/rank",
     "pages/calc/calc",
-    "pages/news/news"
+    "pages/news/news",
+    "pages/alert/alert"
   ],
   "window": {
     "navigationBarTextStyle": "white",

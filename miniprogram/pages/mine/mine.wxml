@@ -51,6 +51,15 @@
   </view>
 
   <view class="group">
+    <view class="group-title">设置</view>
+    <view class="cell" bindtap="goAlert" hover-class="cell-hover">
+      <text class="cell-icon">🔔</text>
+      <view class="cell-main"><text class="cell-label">涨跌提醒</text><text class="cell-desc">{{alertOn ? '已开启 · 全部持仓 ±阈值提醒' : '对所有持仓设置涨跌提醒'}}</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="group">
     <view class="group-title">数据</view>
     <view class="cell" bindtap="clearData" hover-class="cell-hover">
       <text class="cell-icon">🗑️</text>

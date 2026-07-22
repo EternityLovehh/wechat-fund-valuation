@@ -1,6 +1,8 @@
-// 云函数(定时触发)：检查基金涨跌是否达到用户设定阈值，命中则发订阅消息。
-// 触发器：交易时段每 30 分钟(见 config.json)。一次订阅授权只能发一条，发后 quota-1。
-// 当日去重：同一订阅每天最多推一次(lastSentDate)，避免阈值持续满足时反复推送。
+// 云函数(定时触发):检查用户持仓是否达到「全局涨跌提醒」阈值,命中则发订阅消息。
+// 触发器:交易时段每 30 分钟(见 config.json)。
+// 数据模型:fund_alerts 一个用户一条(_id=openid),字段 enabled/upPct/downPct/codes[]/names{}/quota/lastSentDate。
+// 策略:每个用户每天最多推一条(lastSentDate 去重),取当日涨跌最猛的一只作为主体,多只命中则标注「等N只」。
+//       一次订阅授权只能发一条,发后 quota-1。
 const cloud = require('wx-server-sdk');
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -22,7 +24,7 @@ function httpGet(url, headers = {}) {
   });
 }
 
-// 拉官方估值排行，构建 code -> { gszzl(%), gsz, name }
+// 拉官方估值排行,构建 code -> { gszzl(%), gsz, name }
 async function loadGZMap() {
   const url =
     'https://api.fund.eastmoney.com/FundGuZhi/GetFundGZList' +
@@ -46,12 +48,12 @@ function beijingNow() {
 }
 
 exports.main = async () => {
-  // 仅工作日执行(周末直接跳过；节假日未做精确排除，靠 quota 兜底)
+  // 仅工作日执行(周末跳过;节假日未精确排除,靠 quota/估值兜底)
   const bjDay = new Date(Date.now() + 8 * 3600 * 1000).getUTCDay();
   if (bjDay === 0 || bjDay === 6) return { skipped: 'weekend' };
 
-  const alerts = await db.collection('fund_alerts').where({ quota: _.gt(0) }).get();
-  if (!alerts.data.length) return { sent: 0, reason: 'no-active-alerts' };
+  const users = await db.collection('fund_alerts').where({ enabled: true, quota: _.gt(0) }).get();
+  if (!users.data.length) return { sent: 0, reason: 'no-active-users' };
 
   let gz;
   try {
@@ -61,36 +63,59 @@ exports.main = async () => {
   }
 
   const time = beijingNow();
-  const today = time.slice(0, 10); // 北京日期 YYYY-MM-DD
+  const today = time.slice(0, 10);
   let sent = 0;
-  for (const a of alerts.data) {
-    if (a.lastSentDate === today) continue; // 当日已推送过，去重
-    const est = gz.map[a.code];
-    if (!est || est.gszzl == null) continue;
-    const g = est.gszzl; // 当日估算涨跌 %
-    const hitUp = a.upPct != null && g >= a.upPct;
-    const hitDown = a.downPct != null && g <= -Math.abs(a.downPct);
-    if (!hitUp && !hitDown) continue;
+
+  for (const u of users.data) {
+    if (u.lastSentDate === today) continue; // 当日已推,去重
+    const codes = Array.isArray(u.codes) ? u.codes : [];
+    if (!codes.length) continue;
+    const up = u.upPct;
+    const down = u.downPct;
+
+    // 收集命中项
+    const hits = [];
+    for (const code of codes) {
+      const est = gz.map[code];
+      if (!est || est.gszzl == null) continue;
+      const g = est.gszzl;
+      const hitUp = up != null && up > 0 && g >= up;
+      const hitDown = down != null && down > 0 && g <= -Math.abs(down);
+      if (hitUp || hitDown) {
+        const nm = (u.names && u.names[code]) || est.name || code;
+        hits.push({ code, g, gsz: est.gsz, name: nm, dir: hitUp ? 'up' : 'down' });
+      }
+    }
+    if (!hits.length) continue;
+
+    // 取涨跌幅度最大的一只作为主体
+    hits.sort((a, b) => Math.abs(b.g) - Math.abs(a.g));
+    const top = hits[0];
+    const desc = hits.length > 1
+      ? `${hits.length}只基金达到提醒线`
+      : (top.dir === 'up' ? '涨幅达到提醒线' : '跌幅达到提醒线');
 
     try {
       await cloud.openapi.subscribeMessage.send({
-        touser: a.openid,
+        touser: u.openid,
         templateId: TEMPLATE_ID,
         page: 'pages/holding/holding',
         miniprogramState: 'formal',
         data: {
-          thing6: { value: String(a.name || a.code).slice(0, 20) },
-          character_string8: { value: `${g >= 0 ? '+' : ''}${g.toFixed(2)}%` },
+          thing6: { value: String(top.name).slice(0, 20) },
+          character_string8: { value: `${top.g >= 0 ? '+' : ''}${top.g.toFixed(2)}%` },
           time9: { value: time },
-          amount12: { value: (est.gsz || 0).toFixed(2) },
-          thing10: { value: hitUp ? '涨幅达到提醒线' : '跌幅达到提醒线' }
+          amount12: { value: (top.gsz || 0).toFixed(2) },
+          thing10: { value: desc.slice(0, 20) }
         }
       });
-      await db.collection('fund_alerts').doc(a._id).update({ data: { quota: _.inc(-1), lastSentAt: Date.now(), lastSentDate: today } });
+      await db.collection('fund_alerts').doc(u._id).update({
+        data: { quota: _.inc(-1), lastSentAt: Date.now(), lastSentDate: today }
+      });
       sent++;
     } catch (e) {
-      // 单条失败不影响其他
+      // 单个用户失败不影响其他
     }
   }
-  return { sent, total: alerts.data.length, gzrq: gz.gzrq };
+  return { sent, users: users.data.length, gzrq: gz.gzrq };
 };

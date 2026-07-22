@@ -1,6 +1,12 @@
 // app.ts
+import { syncCodesSilently } from './utils/alert'
+
 App<IAppOption>({
   globalData: {},
+  onShow() {
+    // 后台同步持仓代码/设置到云端(不弹窗、不需点击),保证提醒针对最新持仓
+    syncCodesSilently();
+  },
   onLaunch() {
     // 初始化云开发（OCR功能需要）
     if (wx.cloud) {

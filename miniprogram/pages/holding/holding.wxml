@@ -42,6 +42,10 @@ module.exports = {
       <button class="calendar-btn" bindtap="goToCalendar">收益日历</button>
       <button class="clear-btn" bindtap="clearAllHoldings" wx:if="{{holdings.length > 0}}">清空</button>
     </view>
+    <!-- 涨跌提醒:未开→去设置;已开但今日未续→一键续订(勾过「总是保持」则静默) -->
+    <view wx:if="{{alertEnabled && !alertRenewed}}" class="alert-chip renew" catchtap="onRenewAlert">🔔 点我续订今日提醒 · 命中 ±阈值将推送</view>
+    <view wx:elif="{{alertEnabled}}" class="alert-chip ok" catchtap="goAlertSettings">🔔 今日提醒已就绪 · 点击管理</view>
+    <view wx:else class="alert-chip off" catchtap="goAlertSettings">🔔 开启涨跌提醒(对全部持仓)</view>
   </view>
 
   <view wx:if="{{loading}}" class="skeleton">

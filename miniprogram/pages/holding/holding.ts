@@ -4,6 +4,7 @@ import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, Impor
 import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
 import { recordPortfolioSnapshot } from '../../utils/history'
+import { getAlertSettings, isRenewedToday, renewQuota } from '../../utils/alert'
 
 // 阶段涨幅 + 关联板块(两类持仓共用)
 interface ExtraCols {
@@ -55,7 +56,9 @@ Page({
     marketStatus: '' as MarketStatus | '',
     statusLabel: '',
     valuationTime: '', // 估值时间 gztime，如 "2026-05-09 14:32"
-    valuationDate: ''  // 净值日期 jzrq，如 "2026-05-09"
+    valuationDate: '',  // 净值日期 jzrq，如 "2026-05-09"
+    alertEnabled: false, // 涨跌提醒是否开启
+    alertRenewed: false  // 今日额度是否已续订
   } as {
     holdings: UnifiedHoldingDisplay[];
     totalCost: number;
@@ -71,6 +74,8 @@ Page({
     statusLabel: string;
     valuationTime: string;
     valuationDate: string;
+    alertEnabled: boolean;
+    alertRenewed: boolean;
   },
 
   autoRefreshTimer: null as number | null,
@@ -81,10 +86,23 @@ Page({
   },
 
   onShow() {
+    const s = getAlertSettings();
+    this.setData({ alertEnabled: s.enabled, alertRenewed: isRenewedToday() });
     // 每次进入都重新加载：持仓金额/加仓待确认等会在不改变基金代码集合的情况下变化
     // （如加仓、重新导入同一批基金），只比代码集合会漏掉这些更新，导致显示旧金额。
     this.loadHoldings();
     this.startAutoRefresh();
+  },
+
+  // 续订今日提醒额度(点击;勾过「总是保持」则静默无弹窗)
+  async onRenewAlert() {
+    const ok = await renewQuota();
+    this.setData({ alertRenewed: isRenewedToday() });
+    if (ok) wx.showToast({ title: '今日提醒已续订', icon: 'success' });
+  },
+
+  goAlertSettings() {
+    wx.navigateTo({ url: '/pages/alert/alert' });
   },
 
   onHide() {

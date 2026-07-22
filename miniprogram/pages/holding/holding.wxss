@@ -371,3 +371,9 @@ page {
 .slide-hint { font-size: 20rpx; color: #bbb; text-align: center; padding: 14rpx 0; }
 /* 估值来源角标(缩小,内联在涨幅后) */
 .est-tag { font-size: 16rpx; color: #ff9800; border: 1rpx solid #ffcc80; background: #fff8ec; padding: 0 4rpx; border-radius: 4rpx; margin-left: 6rpx; }
+
+/* 涨跌提醒 chip(持仓页汇总区,白底) */
+.alert-chip { margin-top: 20rpx; text-align: center; font-size: 24rpx; padding: 16rpx 0; border-radius: 12rpx; }
+.alert-chip.renew { color: #fff; background: #ff9800; }
+.alert-chip.ok { color: #2ba471; background: #eef9f3; }
+.alert-chip.off { color: #4a8cff; background: #eef4ff; }

@@ -1,5 +1,6 @@
-// mine.ts - 「我的」聚合页：分析/工具/数据入口
+// mine.ts - 「我的」聚合页：分析/工具/设置/数据入口
 import { clearHistoryData } from '../../utils/history'
+import { getAlertSettings } from '../../utils/alert'
 
 // 随机好听的默认昵称（首次进入生成并保存，保持稳定）
 const NICK_ADJ = ['稳健', '从容', '长期', '价值', '理性', '佛系', '淡定', '乐观', '聪明', '勤劳', '复利', '元气', '招财', '常胜', '踏实'];
@@ -14,7 +15,8 @@ Page({
   data: {
     version: '1.0.0',
     nickname: '基金投资者',
-    avatarUrl: ''
+    avatarUrl: '',
+    alertOn: false
   },
 
   onShow() {
@@ -27,7 +29,7 @@ Page({
       name = randomNickname();
       try { wx.setStorageSync('mine_nickname', name); } catch (e) { /* ignore */ }
     }
-    this.setData({ nickname: name, avatarUrl: avatar || '' });
+    this.setData({ nickname: name, avatarUrl: avatar || '', alertOn: getAlertSettings().enabled });
   },
 
   // 微信头像选择（open-type=chooseAvatar）；存到本地持久路径
@@ -83,6 +85,9 @@ Page({
   },
   goNews() {
     wx.navigateTo({ url: '/pages/news/news' });
+  },
+  goAlert() {
+    wx.navigateTo({ url: '/pages/alert/alert' });
   },
 
   clearData() {

@@ -3,7 +3,6 @@ import { getFundEstimate, FundInfo, getFundHoldings, getFundSectorAllocation, ge
 import { getHoldingFunds, removeHolding, getImportedHoldings, saveImportedHolding, removeImportedHolding, addOptionalFund } from '../../utils/storage'
 import { normalizeHolding } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
-import { enableFundAlert } from '../../utils/alert'
 
 // 当前日期 YYYY-MM-DD（走统一开关，便于调试时整体覆盖）
 function todayStr(): string {
@@ -40,17 +39,6 @@ Page({
     chartTs: 0, // 估值分时图缓存刷新戳
     baseInfo: null as FundBaseInfo | null, // 基本信息补全
     periods: [] as PeriodPerf[] // 阶段业绩+排名
-  },
-
-  // 开启涨跌提醒：默认 ±3%，一键一次性订阅并记录到云端
-  async openAlert() {
-    const fund = this.data.fund;
-    if (!fund) return;
-    wx.showLoading({ title: '开启中', mask: true });
-    const r = await enableFundAlert(fund.code, fund.name, 3, 3);
-    wx.hideLoading();
-    const msg = r === 'ok' ? '已按 ±3% 开启，命中后推送一次' : r === 'rejected' ? '未授权订阅' : '开启失败';
-    wx.showToast({ title: msg, icon: r === 'ok' ? 'success' : 'none' });
   },
 
   onLoad(options: any) {
