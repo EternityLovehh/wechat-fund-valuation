@@ -359,11 +359,12 @@ page {
   display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
 }
 .thead .c { color: #999; font-size: 24rpx; font-weight: 400; padding: 20rpx 12rpx; }
-/* 逐列宽度(表头/数据同一 .trow 选择器,保证严格对齐) */
-.trow .c:nth-child(3) { width: 140rpx; } /* 今日 */
-.trow .c:nth-child(4) { width: 160rpx; } /* 关联板块 */
-.trow .c:nth-child(5), .trow .c:nth-child(6) { width: 120rpx; } /* 近1月/近1年 */
-.trow .c:nth-child(7) { width: 160rpx; } /* 持有金额 */
+/* 逐列宽度用显式 class(不用 nth-child:微信会把 WXML 注释算进 nth-child 导致错位) */
+.c-est { width: 150rpx; }  /* 估值 */
+.c-day { width: 140rpx; }  /* 今日 */
+.c-bd  { width: 160rpx; }  /* 关联板块 */
+.c-m   { width: 120rpx; }  /* 近1月/近1年 */
+.c-amt { width: 160rpx; }  /* 持有金额 */
 
 /* 首列名称:粘性固定 + 左对齐 */
 .c-name {

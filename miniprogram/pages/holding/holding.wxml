@@ -62,12 +62,12 @@ module.exports = {
       <view class="tbl">
         <view class="trow thead">
           <view class="c c-name">名称/占比</view>
-          <view class="c">关联板块</view>
-          <view class="c">持有收益</view>
-          <view class="c">当日涨幅</view>
-          <view class="c">持有金额</view>
-          <view class="c">近1月</view>
-          <view class="c">近1年</view>
+          <view class="c c-bd">关联板块</view>
+          <view class="c c-earn">持有收益</view>
+          <view class="c c-day">当日涨幅</view>
+          <view class="c c-amt">持有金额</view>
+          <view class="c c-m">近1月</view>
+          <view class="c c-m">近1年</view>
         </view>
         <view wx:for="{{holdings}}" wx:key="code" class="trow" bindtap="goToDetail" data-code="{{item.code}}">
           <view class="c c-name">
@@ -78,32 +78,27 @@ module.exports = {
               <text wx:else>占比 {{utils.toFixed(item.holdingRatio, 2)}}%</text>
             </view>
           </view>
-          <!-- 关联板块: 板块涨跌(大) + 板块名(小) -->
-          <view class="c">
+          <view class="c c-bd">
             <text class="cell-top {{item.boardChange == null ? 'muted' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
             <text class="cell-sub">{{item.board || '-'}}</text>
           </view>
-          <!-- 持有收益: 收益(大) + 收益率(小) -->
-          <view class="c">
+          <view class="c c-earn">
             <block wx:if="{{item.pendingAmount > 0 && !item.shares}}"><text class="cell-top muted">确认中</text></block>
             <block wx:else>
               <text class="cell-top {{item.profit >= 0 ? 'positive' : 'negative'}}">{{item.profit >= 0 ? '+' : ''}}{{utils.toFixed(item.profit, 2)}}</text>
               <text class="cell-sub {{item.profitRate >= 0 ? 'positive' : 'negative'}}">{{item.profitRate >= 0 ? '+' : ''}}{{utils.toFixed(item.profitRate, 2)}}%</text>
             </block>
           </view>
-          <!-- 当日涨幅: 涨幅(大) + 今日收益(小) -->
-          <view class="c">
+          <view class="c c-day">
             <block wx:if="{{item.pendingAmount > 0 && !item.shares}}"><text class="cell-top muted">--</text></block>
             <block wx:else>
               <text class="cell-top {{item.dayGrowth >= 0 ? 'positive' : 'negative'}}">{{item.dayGrowth !== 0 ? (item.dayGrowth >= 0 ? '+' : '') + utils.toFixed(item.dayGrowth, 2) + '%' : '-'}}<text class="est-tag" wx:if="{{item.estimateSource === 'computed'}}">估</text></text>
               <text class="cell-sub {{item.todayProfit >= 0 ? 'positive' : 'negative'}}">{{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}</text>
             </block>
           </view>
-          <!-- 持有金额 -->
-          <view class="c"><text class="cell-top dark">¥{{utils.toFixed(item.currentAmount || item.amount, 0)}}</text></view>
-          <!-- 近1月/近1年 -->
-          <view class="c"><text class="cell-top {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</text></view>
-          <view class="c"><text class="cell-top {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</text></view>
+          <view class="c c-amt"><text class="cell-top dark">¥{{utils.toFixed(item.currentAmount || item.amount, 0)}}</text></view>
+          <view class="c c-m"><text class="cell-top {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</text></view>
+          <view class="c c-m"><text class="cell-top {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</text></view>
         </view>
       </view>
     </scroll-view>
