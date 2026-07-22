@@ -40,3 +40,6 @@
 .tlabel { flex: 0 0 150rpx; color: #999; text-align: left; border-left: none; }
 .tname { font-weight: 600; }
 .thead .tcell { color: #666; }
+
+/* 破除 app.wxss 全局 .container(flex居中/200rpx留白)泄漏 */
+.container { display: block; }

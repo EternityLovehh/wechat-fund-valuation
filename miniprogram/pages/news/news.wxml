@@ -7,7 +7,7 @@
   <view wx:elif="{{list.length === 0}}" class="empty">暂无资讯，下拉重试</view>
 
   <view wx:else class="list">
-    <view wx:for="{{list}}" wx:key="index" class="news">
+    <view wx:for="{{list}}" wx:key="title" class="news">
       <view class="n-title">{{item.title}}</view>
       <view wx:if="{{item.digest}}" class="n-digest">{{item.digest}}</view>
       <view class="n-time">{{item.time}}</view>

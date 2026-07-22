@@ -3,7 +3,7 @@ import { getBatchFundEstimate, getFundBaseInfo, getFundPeriodIncrease } from '..
 import { getOptionalFunds, getHoldingFunds, getImportedHoldings } from '../../utils/storage'
 
 interface Candidate { code: string; name: string }
-interface Cell { text: string; cls: string }
+interface Cell { text: string; cls: string; k?: number }
 interface Row { label: string; values: Cell[] }
 
 function pctCell(v: number | null | undefined): Cell {
@@ -78,6 +78,8 @@ Page({
         { label: '风险', values: cols.map((c) => plain(c.base ? c.base.riskLabel : '')) },
         { label: '经理', values: cols.map((c) => plain(c.base ? c.base.manager : '')) }
       ];
+      // 给每个单元格加列索引作 wx:key，避免 key 警告
+      rows.forEach((r) => r.values.forEach((v, i) => (v.k = i)));
       this.setData({ rows, names: cols.map((c) => c.name), loading: false });
     } catch (e) {
       console.error('对比加载失败:', e);

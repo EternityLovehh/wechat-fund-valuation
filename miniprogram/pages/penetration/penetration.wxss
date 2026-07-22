@@ -37,3 +37,6 @@
 .tip { font-size: 20rpx; color: #bbb; line-height: 1.6; margin-top: 16rpx; }
 
 /* 骨架屏(复用全局 .skeleton/.sk-*) */
+
+/* 破除 app.wxss 全局 .container(flex居中/200rpx留白)泄漏 */
+.container { display: block; }

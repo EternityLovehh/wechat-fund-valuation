@@ -23,11 +23,11 @@
     <view wx:elif="{{rows.length > 0}}" class="table">
       <view class="trow thead">
         <text class="tcell tlabel">指标</text>
-        <text wx:for="{{names}}" wx:key="index" class="tcell tname">{{item}}</text>
+        <text wx:for="{{names}}" wx:key="*this" class="tcell tname">{{item}}</text>
       </view>
       <view wx:for="{{rows}}" wx:key="label" class="trow">
         <text class="tcell tlabel">{{item.label}}</text>
-        <text wx:for="{{item.values}}" wx:for-item="v" wx:key="index" class="tcell {{v.cls}}">{{v.text}}</text>
+        <text wx:for="{{item.values}}" wx:for-item="v" wx:key="k" class="tcell {{v.cls}}">{{v.text}}</text>
       </view>
     </view>
   </block>

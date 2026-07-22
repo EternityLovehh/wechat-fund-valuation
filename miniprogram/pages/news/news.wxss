@@ -7,3 +7,6 @@
 .n-digest { font-size: 24rpx; color: #888; line-height: 1.6; margin-top: 10rpx; }
 .n-time { font-size: 22rpx; color: #bbb; margin-top: 12rpx; }
 .foot { text-align: center; font-size: 22rpx; color: #bbb; padding: 20rpx 0; }
+
+/* 破除 app.wxss 全局 .container 泄漏 */
+.container { display: block; padding: 0; }

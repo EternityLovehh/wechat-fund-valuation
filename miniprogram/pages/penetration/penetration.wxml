@@ -42,7 +42,7 @@ module.exports = { pct: pct, chg: chg }
       <view wx:for="{{stocks}}" wx:key="code" class="row">
         <view class="c-name"><text class="s-name">{{item.name}}</text><text class="s-code">{{item.code}}</text></view>
         <text class="c-cell">{{u.pct(item.pct)}}%</text>
-        <text class="c-cell {{item.change >= 0 ? 'up' : (item.change < 0 ? 'down' : '')}}">{{u.chg(item.change)}}</text>
+        <text class="c-cell {{item.change == null ? '' : (item.change >= 0 ? 'up' : 'down')}}">{{u.chg(item.change)}}</text>
       </view>
       <view class="tip">多只基金重仓同一股票时，此处已合并——占比越高，隐性集中风险越大。仅统计披露的前十大重仓。</view>
     </view>

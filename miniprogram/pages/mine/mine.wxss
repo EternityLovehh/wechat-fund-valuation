@@ -46,3 +46,6 @@
   margin-top: 40rpx;
   padding: 0 32rpx;
 }
+
+/* 破除 app.wxss 全局 .container(flex居中/200rpx留白)泄漏 */
+.container { display: block; }

@@ -40,5 +40,5 @@ module.exports = { money: money, f2: f2 }
     </view>
   </view>
 
-  <view class="tip">按"预期年化恒定、每期期初投入"的复利模型估算，仅供参考。实际基金收益波动，不代表未来表现。</view>
+  <view class="tip">按"预期年化恒定、每期期末投入"的复利模型估算，仅供参考。实际基金收益波动，不代表未来表现。</view>
 </view>

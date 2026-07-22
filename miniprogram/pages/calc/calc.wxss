@@ -21,3 +21,6 @@
 .ri-k { font-size: 22rpx; color: #999; margin-top: 4rpx; }
 
 .tip { font-size: 22rpx; color: #bbb; line-height: 1.6; padding: 0 8rpx; }
+
+/* 破除 app.wxss 全局 .container(flex居中/200rpx留白)泄漏 */
+.container { display: block; }

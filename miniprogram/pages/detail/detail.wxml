@@ -46,7 +46,7 @@ module.exports = {
       <view wx:for="{{periods}}" wx:key="label" class="perf-row">
         <text class="perf-label">{{item.label}}</text>
         <text class="perf-syl {{item.syl >= 0 ? 'positive' : 'negative'}}">{{item.syl >= 0 ? '+' : ''}}{{utils.toFixed(item.syl, 2)}}%</text>
-        <text class="perf-rank">{{item.rank}}/{{item.sc}}</text>
+        <text class="perf-rank">{{item.sc > 0 ? item.rank + '/' + item.sc : '--'}}</text>
       </view>
     </view>
 
