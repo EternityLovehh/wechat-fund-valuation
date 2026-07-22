@@ -1,11 +1,17 @@
 // holding.ts - 持仓页面
-import { getBatchFundEstimate, FundInfo, getNetValueByDate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getNetValueByDate, getFundPeriodIncrease, getFundBoards, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
 import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
 import { recordPortfolioSnapshot } from '../../utils/history'
 
-interface HoldingDisplay extends HoldingFund {
+// 阶段涨幅 + 关联板块(两类持仓共用)
+interface ExtraCols {
+  m1?: number; m3?: number; y1?: number;
+  board?: string; boardChange?: number | null;
+}
+
+interface HoldingDisplay extends HoldingFund, ExtraCols {
   currentValue: number;
   estimatedValue: number;
   profit: number;
@@ -18,7 +24,7 @@ interface HoldingDisplay extends HoldingFund {
 }
 
 // 导入的持仓显示（包含实时数据）
-interface ImportedHoldingDisplay extends ImportedHolding {
+interface ImportedHoldingDisplay extends ImportedHolding, ExtraCols {
   type: 'imported'; // 标记为导入类型
   currentAmount?: number; // 实时金额（已确认市值 + 待确认加仓）
   estimatedValue?: number; // 当前估值
@@ -310,6 +316,33 @@ Page({
         ...manualResults,
         ...importedResults
       ];
+
+      // 阶段涨幅(近1月/3月/1年) + 关联板块(主板块+加权涨跌)，附加到每条持仓
+      const holdCodes = Array.from(new Set(allHoldings.map((h) => h.code).filter((c) => /^\d{6}$/.test(c))));
+      const [periodArr, boards] = await Promise.all([
+        Promise.all(
+          holdCodes.map(async (c): Promise<[string, { m1: number; m3: number; y1: number }]> => {
+            try {
+              const p = await getFundPeriodIncrease(c);
+              const g = (l: string) => { const x = p.find((pp) => pp.label === l); return x ? x.syl : 0; };
+              return [c, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
+            } catch (e) {
+              return [c, { m1: 0, m3: 0, y1: 0 }];
+            }
+          })
+        ),
+        getFundBoards(holdCodes).catch(() => new Map<string, { board: string; change: number | null }>())
+      ]);
+      const periodMap = new Map(periodArr);
+      allHoldings.forEach((h) => {
+        const per = periodMap.get(h.code) || { m1: 0, m3: 0, y1: 0 };
+        (h as any).m1 = per.m1;
+        (h as any).m3 = per.m3;
+        (h as any).y1 = per.y1;
+        const bd = (boards as Map<string, { board: string; change: number | null }>).get(h.code);
+        (h as any).board = bd ? bd.board : '';
+        (h as any).boardChange = bd ? bd.change : null;
+      });
 
       // ===== 统一汇总 =====
       let totalValue = 0;
