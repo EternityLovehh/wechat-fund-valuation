@@ -613,27 +613,38 @@ export async function getFundBoards(codes: string[]): Promise<Map<string, { boar
   const changeMap = await getBatchStockChangeMap(stockCodes);
 
   for (const f of fundTop) {
-    const bw = new Map<string, number>(); // 板块 → 权重合计
-    const bc = new Map<string, { w: number; cw: number }>(); // 板块 → 加权涨跌
+    // 板块今日涨跌 = 前5大重仓的加权今日涨跌(腾讯行情,稳定)
+    let w = 0;
+    let cw = 0;
+    for (const s of f.top) {
+      const chg = changeMap.get(s.code);
+      if (chg != null && Number.isFinite(chg) && Math.abs(chg) <= 30) {
+        w += s.weight;
+        cw += s.weight * chg;
+      }
+    }
+    const change = w > 0 ? cw / w : null;
+    // 板块名:优先 push2 f127 细分板块(如"白酒Ⅱ");权重最高者为主板块
+    const bw = new Map<string, number>();
     for (const s of f.top) {
       const b = boardMap.get(s.code) || '';
-      if (!b) continue;
-      bw.set(b, (bw.get(b) || 0) + s.weight);
-      const chg = changeMap.get(s.code);
-      const cur = bc.get(b) || { w: 0, cw: 0 };
-      if (chg != null && Number.isFinite(chg) && Math.abs(chg) <= 30) {
-        cur.w += s.weight;
-        cur.cw += s.weight * chg;
-      }
-      bc.set(b, cur);
+      if (b) bw.set(b, (bw.get(b) || 0) + s.weight);
     }
     let dom = '';
     let mw = 0;
-    bw.forEach((w, b) => { if (w > mw) { mw = w; dom = b; } });
-    if (dom) {
-      const c = bc.get(dom);
-      out.set(f.code, { board: dom, change: c && c.w > 0 ? c.cw / c.w : null });
-    }
+    bw.forEach((wt, b) => { if (wt > mw) { mw = wt; dom = b; } });
+    out.set(f.code, { board: dom, change });
+  }
+
+  // 行业兜底:push2 f127 没拿到板块名的基金,用行业配置(fundmobapi,稳定但较粗)填名,避免整列空
+  const needFb = fundTop.filter((f) => { const o = out.get(f.code); return !o || !o.board; });
+  if (needFb.length) {
+    const secs = await Promise.all(needFb.map((f) => getFundSectorAllocation(f.code).catch(() => [])));
+    needFb.forEach((f, i) => {
+      const top = secs[i] && secs[i][0];
+      const o = out.get(f.code);
+      if (o && top) o.board = top.name;
+    });
   }
   return out;
 }
