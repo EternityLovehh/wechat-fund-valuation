@@ -5,7 +5,8 @@
     "pages/search/search",
     "pages/detail/detail",
     "pages/import/import",
-    "pages/calendar/calendar"
+    "pages/calendar/calendar",
+    "pages/mine/mine"
   ],
   "window": {
     "navigationBarTextStyle": "white",
@@ -29,6 +30,12 @@
         "text": "持仓",
         "iconPath": "images/Icon3.png",
         "selectedIconPath": "images/Icon4.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "images/Icon5.png",
+        "selectedIconPath": "images/Icon6.png"
       }
     ],
     "position": "bottom"

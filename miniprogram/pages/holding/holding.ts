@@ -1,7 +1,7 @@
 // holding.ts - 持仓页面
-import { getBatchFundEstimate, FundInfo, getNetValueByDate, getFundType, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getNetValueByDate, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
-import { normalizeHolding, settlePendingAdds, computeImportedDisplay, computePortfolioDiagnosis, PortfolioDiagnosis } from '../../utils/holdingCalc'
+import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
 import { recordPortfolioSnapshot } from '../../utils/history'
 
@@ -49,8 +49,7 @@ Page({
     marketStatus: '' as MarketStatus | '',
     statusLabel: '',
     valuationTime: '', // 估值时间 gztime，如 "2026-05-09 14:32"
-    valuationDate: '', // 净值日期 jzrq，如 "2026-05-09"
-    diagnosis: null as PortfolioDiagnosis | null // 持仓诊断
+    valuationDate: ''  // 净值日期 jzrq，如 "2026-05-09"
   } as {
     holdings: UnifiedHoldingDisplay[];
     totalCost: number;
@@ -66,7 +65,6 @@ Page({
     statusLabel: string;
     valuationTime: string;
     valuationDate: string;
-    diagnosis: PortfolioDiagnosis | null;
   },
 
   autoRefreshTimer: null as number | null,
@@ -374,14 +372,6 @@ Page({
       // 已有更新的一次加载在跑：丢弃本次（较旧）结果，避免覆盖闪烁
       if (seq !== this.loadSeq) return;
 
-      // 持仓诊断：按基金类型分布 + 集中度
-      const diagnosis = computePortfolioDiagnosis(
-        allHoldings.map((h) => ({
-          fundType: getFundType(h.code),
-          amount: Number((h as any).currentAmount) || 0
-        }))
-      );
-
       // 记录资产快照（供总资产走势/收益日历）：
       // 按"已确认净值日期(latestValuationDate)"归档，而非今天——盘中记的是上一确认日、盘后净值出来记当天，
       // 每个日期存的都是该日"确认净值市值"；当日收益用"确认涨跌"(由 navChgRt 反推)，不用盘中估算。
@@ -422,7 +412,6 @@ Page({
         statusLabel: STATUS_LABELS[status],
         valuationTime,
         valuationDate,
-        diagnosis,
         loading: false
       });
     } catch (e) {

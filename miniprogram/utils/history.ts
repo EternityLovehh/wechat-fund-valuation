@@ -148,6 +148,12 @@ export interface EstimateAccuracySummary {
   avgErr: number;            // 平均绝对偏差（百分点）
   records: EstimateAccuracy[]; // 最近若干条（最新在前）
 }
+// 清空统计类历史数据（总资产走势 + 收益日历 + 估值准确度），不影响自选/持仓
+export function clearHistoryData(): void {
+  try { wx.removeStorageSync(PORTFOLIO_HISTORY_KEY); } catch (e) { /* ignore */ }
+  try { wx.removeStorageSync(ESTIMATE_ACC_KEY); } catch (e) { /* ignore */ }
+}
+
 export function getEstimateAccuracySummary(limit: number = 15): EstimateAccuracySummary {
   const all = getEstimateAccuracyAll()
     .filter((r) => r.est != null && r.actual != null)

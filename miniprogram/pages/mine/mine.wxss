@@ -1,0 +1,48 @@
+/* mine.wxss */
+.container {
+  min-height: 100vh;
+  background: #f5f6fa;
+  padding: 0 0 40rpx;
+  box-sizing: border-box;
+}
+
+.mine-header {
+  background: #7CB9E8;
+  color: #fff;
+  padding: 60rpx 32rpx 40rpx;
+}
+.mine-title { font-size: 40rpx; font-weight: 600; }
+.mine-sub { font-size: 22rpx; opacity: 0.85; margin-top: 8rpx; }
+
+.group {
+  margin: 24rpx 24rpx 0;
+  background: #fff;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+.group-title {
+  font-size: 24rpx;
+  color: #999;
+  padding: 20rpx 24rpx 8rpx;
+}
+.cell {
+  display: flex;
+  align-items: center;
+  padding: 26rpx 24rpx;
+  border-top: 1rpx solid #f2f3f5;
+}
+.cell:first-of-type { border-top: none; }
+.cell-hover { background: #f5f7fa; }
+.cell-icon { font-size: 36rpx; margin-right: 20rpx; }
+.cell-main { flex: 1; display: flex; flex-direction: column; }
+.cell-label { font-size: 30rpx; color: #333; }
+.cell-desc { font-size: 22rpx; color: #aaa; margin-top: 4rpx; }
+.cell-arrow { font-size: 40rpx; color: #ccc; margin-left: 12rpx; }
+
+.mine-footer {
+  text-align: center;
+  font-size: 22rpx;
+  color: #bbb;
+  margin-top: 40rpx;
+  padding: 0 32rpx;
+}

@@ -1,0 +1,51 @@
+<!--mine.wxml - 我的（聚合入口）-->
+<view class="container">
+  <view class="mine-header">
+    <view class="mine-title">基金估值助手</view>
+    <view class="mine-sub">v{{version}}</view>
+  </view>
+
+  <view class="group">
+    <view class="group-title">分析</view>
+    <view class="cell" bindtap="goCalendar" hover-class="cell-hover">
+      <text class="cell-icon">📊</text>
+      <view class="cell-main"><text class="cell-label">统计分析</text><text class="cell-desc">走势 · 收益日历 · 估值准确度</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell" bindtap="goPenetration" hover-class="cell-hover">
+      <text class="cell-icon">🔍</text>
+      <view class="cell-main"><text class="cell-label">持仓穿透</text><text class="cell-desc">重仓/板块合并暴露 · 持仓诊断</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="group">
+    <view class="group-title">工具</view>
+    <view class="cell" bindtap="goCompare" hover-class="cell-hover">
+      <text class="cell-icon">⚖️</text>
+      <view class="cell-main"><text class="cell-label">基金对比</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell" bindtap="goRank" hover-class="cell-hover">
+      <text class="cell-icon">🏆</text>
+      <view class="cell-main"><text class="cell-label">基金排行</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+    <view class="cell" bindtap="goCalc" hover-class="cell-hover">
+      <text class="cell-icon">🧮</text>
+      <view class="cell-main"><text class="cell-label">定投计算器</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="group">
+    <view class="group-title">数据</view>
+    <view class="cell" bindtap="clearData" hover-class="cell-hover">
+      <text class="cell-icon">🗑️</text>
+      <view class="cell-main"><text class="cell-label">清空统计数据</text><text class="cell-desc">走势 / 日历 / 准确度（不影响自选持仓）</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="mine-footer">数据来源：东方财富 / 腾讯财经，仅供参考，不构成投资建议</view>
+</view>
