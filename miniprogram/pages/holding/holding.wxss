@@ -358,15 +358,15 @@ page {
 }
 .thead .c-name { background: #fff; }
 .c-name .fund-name {
-  font-size: 30rpx; font-weight: 600; color: #333; line-height: 1.3;
+  font-size: 27rpx; font-weight: 500; color: #444; line-height: 1.3;
   max-width: 224rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.fund-sub { font-size: 22rpx; color: #bbb; margin-top: 8rpx; }
+.fund-sub { font-size: 21rpx; color: #bbb; margin-top: 6rpx; }
 
-/* 单元格:大数字(上) + 小标签(下) */
-.cell-top { font-size: 30rpx; font-weight: 600; line-height: 1.25; }
-.cell-sub { font-size: 22rpx; margin-top: 8rpx; color: #999; }
-.cell-top.dark { color: #333; }
+/* 单元格:数字(上) + 小标签(下) */
+.cell-top { font-size: 28rpx; font-weight: 500; line-height: 1.25; }
+.cell-sub { font-size: 21rpx; margin-top: 6rpx; color: #999; }
+.cell-top.dark { color: #444; }
 .cell-top.muted, .cell-sub.muted { color: #bbb; font-weight: 400; }
 .slide-hint { font-size: 20rpx; color: #bbb; text-align: center; padding: 14rpx 0; }
 /* 估值来源角标(缩小,内联在涨幅后) */
