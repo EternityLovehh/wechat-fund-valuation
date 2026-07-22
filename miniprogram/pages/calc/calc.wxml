@@ -1,0 +1,44 @@
+<!--calc.wxml - 定投计算器-->
+<wxs module="u">
+var money = function(v){ var n=parseFloat(v); if(isNaN(n))return '0'; return n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+var f2 = function(v){ var n=parseFloat(v); return isNaN(n)?'0.00':n.toFixed(2); }
+module.exports = { money: money, f2: f2 }
+</wxs>
+
+<view class="container">
+  <view class="form">
+    <view class="field">
+      <text class="f-label">每期投入(元)</text>
+      <input class="f-input" type="digit" value="{{amount}}" bindinput="onAmount" />
+    </view>
+    <view class="field">
+      <text class="f-label">定投频率</text>
+      <view class="seg">
+        <view wx:for="{{freqs}}" wx:key="label" class="seg-item {{freqIndex === index ? 'on' : ''}}" data-i="{{index}}" bindtap="pickFreq">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="field">
+      <text class="f-label">定投年数</text>
+      <input class="f-input" type="digit" value="{{years}}" bindinput="onYears" />
+    </view>
+    <view class="field">
+      <text class="f-label">预期年化(%)</text>
+      <input class="f-input" type="digit" value="{{rate}}" bindinput="onRate" />
+    </view>
+  </view>
+
+  <view wx:if="{{result}}" class="result">
+    <view class="r-main">
+      <text class="r-label">期末估值</text>
+      <text class="r-fv">¥{{u.money(result.fv)}}</text>
+    </view>
+    <view class="r-grid">
+      <view class="r-item"><text class="ri-v">¥{{u.money(result.invest)}}</text><text class="ri-k">累计投入</text></view>
+      <view class="r-item"><text class="ri-v positive">¥{{u.money(result.gain)}}</text><text class="ri-k">预期收益</text></view>
+      <view class="r-item"><text class="ri-v positive">+{{u.f2(result.rate)}}%</text><text class="ri-k">累计收益率</text></view>
+      <view class="r-item"><text class="ri-v">{{result.periods}}</text><text class="ri-k">总期数</text></view>
+    </view>
+  </view>
+
+  <view class="tip">按"预期年化恒定、每期期初投入"的复利模型估算，仅供参考。实际基金收益波动，不代表未来表现。</view>
+</view>

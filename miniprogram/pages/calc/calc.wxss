@@ -1,0 +1,23 @@
+/* calc.wxss */
+.container { min-height: 100vh; background: #f5f6fa; padding: 24rpx; box-sizing: border-box; }
+.positive { color: #e64340; }
+
+.form { background: #fff; border-radius: 16rpx; padding: 8rpx 24rpx; margin-bottom: 20rpx; }
+.field { display: flex; align-items: center; padding: 24rpx 0; border-bottom: 1rpx solid #f2f3f5; }
+.field:last-child { border-bottom: none; }
+.f-label { width: 200rpx; font-size: 28rpx; color: #333; }
+.f-input { flex: 1; text-align: right; font-size: 30rpx; color: #333; }
+.seg { flex: 1; display: flex; justify-content: flex-end; gap: 12rpx; }
+.seg-item { padding: 8rpx 24rpx; font-size: 26rpx; color: #666; background: #f0f2f5; border-radius: 28rpx; }
+.seg-item.on { color: #fff; background: #7CB9E8; }
+
+.result { background: #fff; border-radius: 16rpx; padding: 32rpx 24rpx; margin-bottom: 20rpx; }
+.r-main { text-align: center; margin-bottom: 28rpx; }
+.r-label { font-size: 24rpx; color: #999; }
+.r-fv { display: block; font-size: 52rpx; font-weight: 700; color: #333; margin-top: 8rpx; }
+.r-grid { display: flex; flex-wrap: wrap; }
+.r-item { width: 50%; display: flex; flex-direction: column; align-items: center; padding: 16rpx 0; }
+.ri-v { font-size: 32rpx; font-weight: 600; color: #333; }
+.ri-k { font-size: 22rpx; color: #999; margin-top: 4rpx; }
+
+.tip { font-size: 22rpx; color: #bbb; line-height: 1.6; padding: 0 8rpx; }

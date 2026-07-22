@@ -9,7 +9,8 @@
     "pages/mine/mine",
     "pages/penetration/penetration",
     "pages/compare/compare",
-    "pages/rank/rank"
+    "pages/rank/rank",
+    "pages/calc/calc"
   ],
   "window": {
     "navigationBarTextStyle": "white",
