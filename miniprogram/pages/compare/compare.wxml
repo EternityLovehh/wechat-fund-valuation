@@ -1,0 +1,34 @@
+<!--compare.wxml - 基金对比-->
+<view class="container">
+  <view wx:if="{{candidates.length === 0}}" class="empty">先在自选或持仓里添加基金,再来对比</view>
+
+  <block wx:else>
+    <!-- 选择器 -->
+    <view class="picker">
+      <view class="picker-tip">选择 2-3 只对比(点选)</view>
+      <view class="chips">
+        <view
+          wx:for="{{candidates}}"
+          wx:key="code"
+          class="chip {{selected.indexOf(item.code) >= 0 ? 'chip-on' : ''}}"
+          data-code="{{item.code}}"
+          bindtap="toggle"
+        >{{item.name}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+    <!-- 对比表 -->
+    <view wx:elif="{{rows.length > 0}}" class="table">
+      <view class="trow thead">
+        <text class="tcell tlabel">指标</text>
+        <text wx:for="{{names}}" wx:key="index" class="tcell tname">{{item}}</text>
+      </view>
+      <view wx:for="{{rows}}" wx:key="label" class="trow">
+        <text class="tcell tlabel">{{item.label}}</text>
+        <text wx:for="{{item.values}}" wx:for-item="v" wx:key="index" class="tcell {{v.cls}}">{{v.text}}</text>
+      </view>
+    </view>
+  </block>
+</view>

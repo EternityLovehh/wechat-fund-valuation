@@ -1,0 +1,42 @@
+/* compare.wxss */
+.container { min-height: 100vh; background: #f5f6fa; padding: 24rpx; box-sizing: border-box; }
+.empty { text-align: center; color: #999; padding: 120rpx 40rpx; font-size: 26rpx; line-height: 1.6; }
+.loading { text-align: center; color: #999; padding: 60rpx 0; font-size: 26rpx; }
+.positive { color: #e64340; }
+.negative { color: #1aad19; }
+
+.picker { background: #fff; border-radius: 16rpx; padding: 20rpx; margin-bottom: 20rpx; }
+.picker-tip { font-size: 24rpx; color: #999; margin-bottom: 12rpx; }
+.chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.chip {
+  font-size: 24rpx;
+  color: #666;
+  background: #f0f2f5;
+  border: 1rpx solid transparent;
+  padding: 10rpx 20rpx;
+  border-radius: 30rpx;
+  max-width: 300rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chip-on { color: #fff; background: #7CB9E8; }
+
+.table { background: #fff; border-radius: 16rpx; overflow: hidden; }
+.trow { display: flex; border-bottom: 1rpx solid #f2f3f5; }
+.trow:last-child { border-bottom: none; }
+.thead { background: #f8fafc; }
+.tcell {
+  flex: 1;
+  padding: 20rpx 12rpx;
+  font-size: 24rpx;
+  color: #333;
+  text-align: center;
+  border-left: 1rpx solid #f2f3f5;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tlabel { flex: 0 0 150rpx; color: #999; text-align: left; border-left: none; }
+.tname { font-weight: 600; }
+.thead .tcell { color: #666; }
