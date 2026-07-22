@@ -3,7 +3,6 @@ import { getBatchFundEstimate, FundInfo, getNetValueByDate, getFundType, isMarke
 import { getHoldingFunds, HoldingFund, removeHolding, getImportedHoldings, ImportedHolding, removeImportedHolding, saveImportedHolding } from '../../utils/storage'
 import { normalizeHolding, settlePendingAdds, computeImportedDisplay, computePortfolioDiagnosis, PortfolioDiagnosis } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
-import { isTradingDay } from '../../utils/tradingCalendar'
 import { recordPortfolioSnapshot } from '../../utils/history'
 
 interface HoldingDisplay extends HoldingFund {
@@ -383,14 +382,32 @@ Page({
         }))
       );
 
-      // 记录当日资产快照（供总资产走势/收益日历）；仅交易日、且有持仓时记录，避免周末/节假日产生幽灵当日收益
-      if (allHoldings.length > 0 && totalValue > 0 && isTradingDay(new Date())) {
-        recordPortfolioSnapshot({
-          totalValue: Number(totalValue) || 0,
-          totalCost: Number(totalCost) || 0,
-          totalProfit: Number(totalProfit) || 0,
-          totalDayProfit: Number(totalDayProfit) || 0
-        });
+      // 记录资产快照（供总资产走势/收益日历）：
+      // 按"已确认净值日期(latestValuationDate)"归档，而非今天——盘中记的是上一确认日、盘后净值出来记当天，
+      // 每个日期存的都是该日"确认净值市值"；当日收益用"确认涨跌"(由 navChgRt 反推)，不用盘中估算。
+      // 这样走势/日历完全是盘后确认口径，且周末/节假日不会产生幽灵当日收益。
+      if (allHoldings.length > 0 && totalValue > 0 && latestValuationDate) {
+        let confirmedDayProfit = 0;
+        for (const h of allHoldings) {
+          const shares = Number((h as any).shares) || 0;
+          const f = estMap.get(h.code);
+          if (!f || shares <= 0) continue;
+          const nav = Number(f.netValue) || 0;
+          const r = Number(f.navChgRt);
+          // 确认当日收益 = 份额 ×(今净值 − 昨净值)，昨净值 = 今净值 /(1 + 涨跌率)
+          if (nav > 0 && Number.isFinite(r) && 100 + r !== 0) {
+            confirmedDayProfit += shares * (nav - nav / (1 + r / 100));
+          }
+        }
+        recordPortfolioSnapshot(
+          {
+            totalValue: Number(totalValue) || 0,
+            totalCost: Number(totalCost) || 0,
+            totalProfit: Number(totalProfit) || 0,
+            totalDayProfit: confirmedDayProfit
+          },
+          latestValuationDate
+        );
       }
 
       this.setData({
