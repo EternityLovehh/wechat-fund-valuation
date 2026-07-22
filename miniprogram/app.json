@@ -8,7 +8,8 @@
     "pages/calendar/calendar",
     "pages/mine/mine",
     "pages/penetration/penetration",
-    "pages/compare/compare"
+    "pages/compare/compare",
+    "pages/rank/rank"
   ],
   "window": {
     "navigationBarTextStyle": "white",

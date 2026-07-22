@@ -1,0 +1,28 @@
+/* rank.wxss */
+.container { min-height: 100vh; background: #f5f6fa; }
+.up { color: #e64340; }
+.down { color: #1aad19; }
+.loading, .empty { text-align: center; color: #999; padding: 80rpx 0; font-size: 26rpx; }
+
+.tabs { white-space: nowrap; background: #fff; padding: 12rpx 12rpx; border-bottom: 1rpx solid #f0f0f0; }
+.tabs-sub { background: #fafbfc; }
+.tab {
+  display: inline-block;
+  padding: 8rpx 24rpx;
+  margin: 0 4rpx;
+  font-size: 26rpx;
+  color: #666;
+  border-radius: 28rpx;
+}
+.tab.on { color: #fff; background: #7CB9E8; }
+
+.list { background: #fff; }
+.row { display: flex; align-items: center; padding: 20rpx 16rpx; border-bottom: 1rpx solid #f5f5f5; font-size: 24rpx; }
+.row-head { color: #999; font-size: 22rpx; background: #f8fafc; }
+.c-idx { width: 48rpx; color: #bbb; text-align: center; }
+.c-name { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 0 8rpx; }
+.r-name { color: #333; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.r-code { color: #aaa; font-size: 20rpx; margin-top: 2rpx; }
+.c-nav { width: 100rpx; text-align: right; color: #666; }
+.c-ret { width: 130rpx; text-align: right; font-weight: 600; }
+.c-act { width: 96rpx; text-align: center; color: #7CB9E8; font-size: 22rpx; }

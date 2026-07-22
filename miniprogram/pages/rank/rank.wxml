@@ -1,0 +1,32 @@
+<!--rank.wxml - 基金排行-->
+<wxs module="u">
+var ret = function(v){ var n=parseFloat(v); if(isNaN(n))return '--'; return (n>=0?'+':'')+n.toFixed(2)+'%'; }
+module.exports = { ret: ret }
+</wxs>
+
+<view class="container">
+  <!-- 类型 -->
+  <scroll-view scroll-x class="tabs">
+    <view wx:for="{{types}}" wx:key="ft" class="tab {{ftIndex === index ? 'on' : ''}}" data-i="{{index}}" bindtap="pickType">{{item.label}}</view>
+  </scroll-view>
+  <!-- 周期 -->
+  <scroll-view scroll-x class="tabs tabs-sub">
+    <view wx:for="{{periods}}" wx:key="sc" class="tab {{scIndex === index ? 'on' : ''}}" data-i="{{index}}" bindtap="pickPeriod">{{item.label}}</view>
+  </scroll-view>
+
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:elif="{{list.length === 0}}" class="empty">暂无数据</view>
+
+  <view wx:else class="list">
+    <view class="row row-head">
+      <text class="c-idx">#</text><text class="c-name">名称</text><text class="c-nav">净值</text><text class="c-ret">{{periods[scIndex].label}}</text><text class="c-act"></text>
+    </view>
+    <view wx:for="{{list}}" wx:key="code" class="row" data-code="{{item.code}}" bindtap="goDetail">
+      <text class="c-idx">{{index + 1}}</text>
+      <view class="c-name"><text class="r-name">{{item.name}}</text><text class="r-code">{{item.code}}</text></view>
+      <text class="c-nav">{{item.nav}}</text>
+      <text class="c-ret {{item.ret >= 0 ? 'up' : 'down'}}">{{u.ret(item.ret)}}</text>
+      <text class="c-act" catchtap="addFav" data-code="{{item.code}}" data-name="{{item.name}}">+自选</text>
+    </view>
+  </view>
+</view>

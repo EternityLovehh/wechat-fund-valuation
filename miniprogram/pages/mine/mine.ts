@@ -16,7 +16,7 @@ Page({
     wx.navigateTo({ url: '/pages/compare/compare' });
   },
   goRank() {
-    wx.showToast({ title: '开发中', icon: 'none' });
+    wx.navigateTo({ url: '/pages/rank/rank' });
   },
   goCalc() {
     wx.showToast({ title: '开发中', icon: 'none' });

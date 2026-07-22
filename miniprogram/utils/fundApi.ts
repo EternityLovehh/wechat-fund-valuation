@@ -403,6 +403,39 @@ export function getFundBaseInfo(code: string): Promise<FundBaseInfo | null> {
   });
 }
 
+// 基金排行（东财 rankhandler，CSV 字段按位取）
+export interface RankItem { code: string; name: string; nav: number; ret: number }
+const RANK_SC_INDEX: Record<string, number> = { rzf: 6, '1yzf': 8, '3yzf': 9, '1nzf': 11, jnzf: 14 };
+export function getFundRankList(ft: string, sc: string, pn: number = 30): Promise<RankItem[]> {
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://fund.eastmoney.com/data/rankhandler.aspx',
+      method: 'GET',
+      header: { Referer: 'https://fund.eastmoney.com/data/fundranking.html' },
+      data: { op: 'ph', dt: 'kf', ft, rs: '', gs: 0, sc, st: 'desc', pi: 1, pn, dx: 1, _: Date.now() },
+      success: (res: any) => {
+        try {
+          const text = String(res.data || '');
+          const m = text.match(/datas:(\[[\s\S]*?\])/);
+          if (!m) { resolve([]); return; }
+          const arr: string[] = JSON.parse(m[1]);
+          const idx = RANK_SC_INDEX[sc] != null ? RANK_SC_INDEX[sc] : 11;
+          const out = arr
+            .map((s) => {
+              const p = s.split(',');
+              return { code: p[0], name: p[1], nav: parseFloat(p[4]) || 0, ret: parseFloat(p[idx]) || 0 };
+            })
+            .filter((x) => /^\d{6}$/.test(x.code));
+          resolve(out);
+        } catch (e) {
+          resolve([]);
+        }
+      },
+      fail: () => resolve([])
+    });
+  });
+}
+
 export interface PeriodPerf { label: string; syl: number; rank: number; sc: number }
 // FundMNPeriodIncrease 的 title → 中文；只取常用几档
 const PERIOD_MAP: Array<[string, string]> = [['Y', '近1月'], ['3Y', '近3月'], ['6Y', '近6月'], ['1N', '近1年'], ['3N', '近3年']];
