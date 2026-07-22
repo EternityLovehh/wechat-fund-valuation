@@ -1,6 +1,21 @@
 <!--calc.wxml - 定投计算器-->
 <wxs module="u">
-var money = function(v){ var n=parseFloat(v); if(isNaN(n))return '0'; return n.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+// WXS 不支持正则字面量，手写千分位
+var money = function(v){
+  var n = parseFloat(v);
+  if (isNaN(n)) return '0';
+  var s = n.toFixed(0);
+  var neg = s.charAt(0) === '-';
+  if (neg) s = s.substring(1);
+  var out = '';
+  var c = 0;
+  for (var i = s.length - 1; i >= 0; i--) {
+    out = s.charAt(i) + out;
+    c++;
+    if (c % 3 === 0 && i > 0) out = ',' + out;
+  }
+  return (neg ? '-' : '') + out;
+}
 var f2 = function(v){ var n=parseFloat(v); return isNaN(n)?'0.00':n.toFixed(2); }
 module.exports = { money: money, f2: f2 }
 </wxs>
