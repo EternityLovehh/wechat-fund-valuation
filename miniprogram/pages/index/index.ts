@@ -16,7 +16,7 @@ Page({
     refreshing: false, // 下拉刷新状态
     scrollLeft: 0,
     scrollTop: 0,
-    marketIndex: null as any, // 大盘指数
+    marketIndices: [] as Array<{ name: string; current: number; changePercent: number }>, // 大盘指数
     // 数据时效/市场状态
     marketStatus: '' as MarketStatus | '',
     statusLabel: '',
@@ -199,55 +199,34 @@ Page({
     }
   },
 
-  // 加载大盘指数
+  // 加载大盘指数（上证/深证/创业板/科创50/沪深300/北证50）
   async loadMarketIndex() {
     try {
+      const defs = [
+        { code: 's_sh000001', name: '上证指数' },
+        { code: 's_sz399001', name: '深证成指' },
+        { code: 's_sz399006', name: '创业板指' },
+        { code: 's_sh000688', name: '科创50' },
+        { code: 's_sh000300', name: '沪深300' },
+        { code: 's_bj899050', name: '北证50' }
+      ];
       wx.request({
-        url: 'https://qt.gtimg.cn/q=s_sh000001,s_sz399001,s_sz399006',
+        url: `https://qt.gtimg.cn/q=${defs.map((d) => d.code).join(',')}`,
         method: 'GET',
         success: (res: any) => {
           try {
             const data = res.data;
-            console.log('大盘指数原始数据:', data);
-            
-            if (typeof data !== 'string') {
-              return;
-            }
-            
-            // 解析上证指数
-            const shMatch = data.match(/v_s_sh000001="([^"]*)"/);
-            // 解析深证成指
-            const szMatch = data.match(/v_s_sz399001="([^"]*)"/);
-            // 解析创业板指
-            const cybMatch = data.match(/v_s_sz399006="([^"]*)"/);
-            
-            const parseIndex = (match: RegExpMatchArray | null, indexName: string) => {
-              if (!match || !match[1]) return null;
-              const fields = match[1].split('~');
-              if (fields.length < 6) return null;
-              
-              // 使用传入的名称，避免编码问题
-              const name = indexName;
-              const current = parseFloat(fields[3]);
-              const change = parseFloat(fields[4]);
-              const changePercent = parseFloat(fields[5]);
-              
-              return { name, current, change, changePercent };
-            };
-            
-            const sh = parseIndex(shMatch, '上证指数');
-            const sz = parseIndex(szMatch, '深证成指');
-            const cyb = parseIndex(cybMatch, '创业板指');
-            
-            if (sh || sz || cyb) {
-              this.setData({
-                marketIndex: {
-                  sh: sh,
-                  sz: sz,
-                  cyb: cyb
-                }
-              });
-            }
+            if (typeof data !== 'string') return;
+            const indices = defs
+              .map((d) => {
+                const m = data.match(new RegExp('v_' + d.code + '="([^"]*)"'));
+                if (!m || !m[1]) return null;
+                const f = m[1].split('~');
+                if (f.length < 6) return null;
+                return { name: d.name, current: parseFloat(f[3]), changePercent: parseFloat(f[5]) };
+              })
+              .filter((x) => x !== null);
+            if (indices.length) this.setData({ marketIndices: indices });
           } catch (e) {
             console.error('解析大盘指数失败:', e);
           }

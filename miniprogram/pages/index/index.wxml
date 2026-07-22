@@ -28,27 +28,13 @@ module.exports = {
     </view>
   </view>
 
-  <!-- 大盘指数 -->
-  <view wx:if="{{marketIndex}}" class="market-index">
-    <view wx:if="{{marketIndex.sh}}" class="index-item">
-      <view class="index-name">{{marketIndex.sh.name}}</view>
-      <view class="index-value">{{marketIndex.sh.current}}</view>
-      <view class="index-change {{marketIndex.sh.changePercent >= 0 ? 'positive' : 'negative'}}">
-        {{marketIndex.sh.changePercent >= 0 ? '+' : ''}}{{utils.toFixed(marketIndex.sh.changePercent, 2)}}%
-      </view>
-    </view>
-    <view wx:if="{{marketIndex.sz}}" class="index-item">
-      <view class="index-name">{{marketIndex.sz.name}}</view>
-      <view class="index-value">{{marketIndex.sz.current}}</view>
-      <view class="index-change {{marketIndex.sz.changePercent >= 0 ? 'positive' : 'negative'}}">
-        {{marketIndex.sz.changePercent >= 0 ? '+' : ''}}{{utils.toFixed(marketIndex.sz.changePercent, 2)}}%
-      </view>
-    </view>
-    <view wx:if="{{marketIndex.cyb}}" class="index-item">
-      <view class="index-name">{{marketIndex.cyb.name}}</view>
-      <view class="index-value">{{marketIndex.cyb.current}}</view>
-      <view class="index-change {{marketIndex.cyb.changePercent >= 0 ? 'positive' : 'negative'}}">
-        {{marketIndex.cyb.changePercent >= 0 ? '+' : ''}}{{utils.toFixed(marketIndex.cyb.changePercent, 2)}}%
+  <!-- 大盘指数(网格) -->
+  <view wx:if="{{marketIndices.length > 0}}" class="market-index">
+    <view wx:for="{{marketIndices}}" wx:key="name" class="index-item">
+      <view class="index-name">{{item.name}}</view>
+      <view class="index-value">{{utils.toFixed(item.current, 2)}}</view>
+      <view class="index-change {{item.changePercent >= 0 ? 'positive' : 'negative'}}">
+        {{item.changePercent >= 0 ? '+' : ''}}{{utils.toFixed(item.changePercent, 2)}}%
       </view>
     </view>
   </view>

@@ -4,13 +4,36 @@ import { clearHistoryData } from '../../utils/history'
 Page({
   data: {
     version: '1.0.0',
-    nickname: '基金投资者'
+    nickname: '基金投资者',
+    avatarUrl: ''
   },
 
   onShow() {
     let name = '';
+    let avatar = '';
     try { name = wx.getStorageSync('mine_nickname'); } catch (e) { /* ignore */ }
-    this.setData({ nickname: name || '基金投资者' });
+    try { avatar = wx.getStorageSync('mine_avatar'); } catch (e) { /* ignore */ }
+    this.setData({ nickname: name || '基金投资者', avatarUrl: avatar || '' });
+  },
+
+  // 微信头像选择（open-type=chooseAvatar）；存到本地持久路径
+  onChooseAvatar(e: any) {
+    const tmp = e && e.detail && e.detail.avatarUrl;
+    if (!tmp) return;
+    let saved = tmp;
+    try {
+      saved = wx.getFileSystemManager().saveFileSync(tmp);
+    } catch (err) {
+      saved = tmp; // 持久化失败则退回临时路径
+    }
+    this.setData({ avatarUrl: saved });
+    try { wx.setStorageSync('mine_avatar', saved); } catch (err) { /* ignore */ }
+  },
+
+  // 头像加载失败(缓存被清)时回退默认
+  onAvatarError() {
+    this.setData({ avatarUrl: '' });
+    try { wx.removeStorageSync('mine_avatar'); } catch (e) { /* ignore */ }
   },
 
   editName() {

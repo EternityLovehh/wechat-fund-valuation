@@ -13,16 +13,20 @@
   display: flex;
   align-items: center;
 }
-.avatar {
+.avatar-btn {
   width: 112rpx;
   height: 112rpx;
+  padding: 0;
+  margin: 0 24rpx 0 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.25);
-  font-size: 56rpx;
   line-height: 112rpx;
-  text-align: center;
-  margin-right: 24rpx;
+  border: none;
+  overflow: hidden;
 }
+.avatar-btn::after { border: none; }
+.avatar-img { width: 112rpx; height: 112rpx; border-radius: 50%; display: block; }
+.avatar-emoji { font-size: 56rpx; line-height: 112rpx; text-align: center; display: block; }
 .p-info { display: flex; flex-direction: column; }
 .p-name { font-size: 38rpx; font-weight: 600; }
 .p-sub { font-size: 22rpx; opacity: 0.85; margin-top: 8rpx; }

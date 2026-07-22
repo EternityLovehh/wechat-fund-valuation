@@ -49,17 +49,19 @@ page {
 .market-index {
   background: white;
   display: flex;
-  padding: 20rpx 30rpx;
-  gap: 20rpx;
+  flex-wrap: wrap;
+  padding: 16rpx 12rpx;
   border-bottom: 1rpx solid #f0f0f0;
 }
 
 .index-item {
-  flex: 1;
+  width: 33.333%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
+  gap: 6rpx;
+  padding: 14rpx 0;
 }
 
 .index-name {

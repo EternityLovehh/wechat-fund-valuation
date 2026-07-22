@@ -1,10 +1,13 @@
 <!--mine.wxml - 我的（聚合入口）-->
 <view class="container">
-  <view class="mine-header" bindtap="editName">
-    <view class="avatar">📈</view>
-    <view class="p-info">
+  <view class="mine-header">
+    <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <image wx:if="{{avatarUrl}}" class="avatar-img" src="{{avatarUrl}}" mode="aspectFill" binderror="onAvatarError" />
+      <text wx:else class="avatar-emoji">📈</text>
+    </button>
+    <view class="p-info" bindtap="editName">
       <text class="p-name">{{nickname}}</text>
-      <text class="p-sub">点击修改昵称 ✎</text>
+      <text class="p-sub">点头像换图 · 点名字改昵称 ✎</text>
     </view>
   </view>
 
