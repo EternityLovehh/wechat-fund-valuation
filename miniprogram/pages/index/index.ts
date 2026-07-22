@@ -1,5 +1,5 @@
 // index.ts - 自选基金页面
-import { getBatchFundEstimate, FundInfo, getFundPeriodIncrease, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getFundPeriodIncrease, getFundBoards, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getOptionalFunds, removeOptionalFund, getHoldingFunds, getImportedHoldings } from '../../utils/storage'
 
 interface FundDisplay extends FundInfo {
@@ -7,6 +7,8 @@ interface FundDisplay extends FundInfo {
   m1?: number; // 近1月
   m3?: number; // 近3月
   y1?: number; // 近1年
+  board?: string; // 主板块
+  boardChange?: number | null; // 主板块今日涨跌
   holdingAmount?: number; // 持有金额
   holdingProfit?: number; // 持有收益
   todayProfit?: number; // 今日收益
@@ -109,6 +111,10 @@ Page({
       );
       const periodMap = new Map(periodEntries);
 
+      // 关联板块(主板块 + 加权今日涨跌)；失败返回空 Map,不影响主流程
+      let boardMap = new Map<string, { board: string; change: number | null }>();
+      try { boardMap = await getFundBoards(Array.from(estMap.keys())); } catch (e) { /* 忽略 */ }
+
       // 按自选顺序组装；无估值数据的（临时码/接口未返回）直接跳过
       const funds: FundDisplay[] = [];
       for (const f of optionalFunds) {
@@ -152,12 +158,15 @@ Page({
           }
         }
 
+        const bd = boardMap.get(f.code);
         funds.push({
           ...fundInfo,
           yearGrowth,
           m1: per.m1,
           m3: per.m3,
           y1: per.y1,
+          board: bd ? bd.board : '',
+          boardChange: bd ? bd.change : null,
           holdingAmount,
           holdingProfit,
           todayProfit

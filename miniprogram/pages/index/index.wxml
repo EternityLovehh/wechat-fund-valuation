@@ -59,6 +59,7 @@ module.exports = {
           <view class="c c-name">名称/代码</view>
           <view class="c">估值</view>
           <view class="c">今日</view>
+          <view class="c c-board">关联板块</view>
           <view class="c">近1月</view>
           <view class="c">近3月</view>
           <view class="c">近1年</view>
@@ -76,6 +77,10 @@ module.exports = {
             <text class="est-tag est-tag-nav" wx:elif="{{item.estimateSource === 'none'}}">净值</text>
           </view>
           <view class="c {{item.estimatedGrowth >= 0 ? 'positive' : 'negative'}}">{{item.estimatedGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.estimatedGrowth, 2)}}%</view>
+          <view class="c c-board c-col">
+            <text class="board-name">{{item.board || '-'}}</text>
+            <text wx:if="{{item.board}}" class="{{item.boardChange == null ? '' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
+          </view>
           <view class="c {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</view>
           <view class="c {{item.m3 >= 0 ? 'positive' : 'negative'}}">{{item.m3 >= 0 ? '+' : ''}}{{utils.toFixed(item.m3, 2)}}%</view>
           <view class="c {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</view>

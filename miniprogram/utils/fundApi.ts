@@ -559,6 +559,85 @@ export function getFundSectorAllocation(code: string): Promise<Array<{ name: str
   });
 }
 
+// ===== 关联板块：个股所属板块(f127) → 基金主板块 + 加权涨跌 =====
+// 板块归属很稳定，缓存 7 天；push2 不稳时失败返回空、下次再补
+const stockBoardCache = new Map<string, { ts: number; board: string }>();
+const STOCK_BOARD_TTL = 7 * 24 * 60 * 60 * 1000; // 取到板块名后缓存 7 天(板块归属稳定)
+const STOCK_BOARD_FAIL_TTL = 30 * 60 * 1000; // 取失败(push2 502)负缓存 30 分钟,避免每 30s 反复猛打
+
+function getStockBoard(code: string): Promise<string> {
+  const hit = stockBoardCache.get(code);
+  if (hit) {
+    if (hit.board && Date.now() - hit.ts < STOCK_BOARD_TTL) return Promise.resolve(hit.board);
+    if (!hit.board && Date.now() - hit.ts < STOCK_BOARD_FAIL_TTL) return Promise.resolve('');
+  }
+  const secid = `${code.startsWith('6') || code.startsWith('9') ? '1' : '0'}.${code}`;
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://push2.eastmoney.com/api/qt/stock/get',
+      method: 'GET',
+      data: { secid, fields: 'f127', _: Date.now() },
+      success: (res: any) => {
+        try {
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const b = p && p.data && p.data.f127 ? String(p.data.f127) : '';
+          stockBoardCache.set(code, { ts: Date.now(), board: b }); // b 为空则负缓存 30 分钟
+          resolve(b);
+        } catch (e) {
+          stockBoardCache.set(code, { ts: Date.now(), board: '' });
+          resolve('');
+        }
+      },
+      fail: () => {
+        stockBoardCache.set(code, { ts: Date.now(), board: '' });
+        resolve('');
+      }
+    });
+  });
+}
+
+// 批量:每只基金 → 主板块(前5大重仓里权重最高的板块) + 该板块加权今日涨跌
+export async function getFundBoards(codes: string[]): Promise<Map<string, { board: string; change: number | null }>> {
+  const out = new Map<string, { board: string; change: number | null }>();
+  const valid = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
+  if (valid.length === 0) return out;
+
+  const holdingsList = await Promise.all(valid.map((c) => getTopHoldingsWeighted(c)));
+  const fundTop = valid.map((c, i) => ({ code: c, top: holdingsList[i].slice(0, 5) }));
+  const stockCodes = Array.from(new Set(fundTop.flatMap((f) => f.top.map((s) => s.code))));
+  if (stockCodes.length === 0) return out;
+
+  const boards = await Promise.all(stockCodes.map((c) => getStockBoard(c)));
+  const boardMap = new Map(stockCodes.map((c, i) => [c, boards[i]]));
+  const changeMap = await getBatchStockChangeMap(stockCodes);
+
+  for (const f of fundTop) {
+    const bw = new Map<string, number>(); // 板块 → 权重合计
+    const bc = new Map<string, { w: number; cw: number }>(); // 板块 → 加权涨跌
+    for (const s of f.top) {
+      const b = boardMap.get(s.code) || '';
+      if (!b) continue;
+      bw.set(b, (bw.get(b) || 0) + s.weight);
+      const chg = changeMap.get(s.code);
+      const cur = bc.get(b) || { w: 0, cw: 0 };
+      if (chg != null && Number.isFinite(chg) && Math.abs(chg) <= 30) {
+        cur.w += s.weight;
+        cur.cw += s.weight * chg;
+      }
+      bc.set(b, cur);
+    }
+    let dom = '';
+    let mw = 0;
+    bw.forEach((w, b) => { if (w > mw) { mw = w; dom = b; } });
+    if (dom) {
+      const c = bc.get(dom);
+      out.set(f.code, { board: dom, change: c && c.w > 0 ? c.cw / c.w : null });
+    }
+  }
+  return out;
+}
+
 // 取某基金前十大重仓（代码 + 简称 + 占净值比），带缓存
 export function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
   const cached = holdingsCache.get(code);
