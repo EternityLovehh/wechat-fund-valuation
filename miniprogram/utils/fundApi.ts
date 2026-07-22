@@ -410,7 +410,7 @@ export function getMarketNews(pageSize: number = 30): Promise<NewsItem[]> {
     wx.request({
       url: `https://newsapi.eastmoney.com/kuaixun/v1/getlist_102_ajaxResult_${pageSize}_1_.html`,
       method: 'GET',
-      dataType: 'text', // 响应是 var ajaxResult=... 非 JSON，禁止自动 JSON.parse
+      dataType: '其他', // 响应是 var ajaxResult=... 非 JSON，非 json 值即返回字符串，禁止自动 JSON.parse
       success: (res: any) => {
         try {
           let text = String(res.data || '').trim();
