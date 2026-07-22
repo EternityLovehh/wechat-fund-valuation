@@ -3,6 +3,7 @@ import { getFundEstimate, FundInfo, getFundHoldings, getFundIndustry, getFundYea
 import { getHoldingFunds, removeHolding, getImportedHoldings, saveImportedHolding, removeImportedHolding, addOptionalFund } from '../../utils/storage'
 import { normalizeHolding } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
+import { enableFundAlert } from '../../utils/alert'
 
 // 当前日期 YYYY-MM-DD（走统一开关，便于调试时整体覆盖）
 function todayStr(): string {
@@ -37,6 +38,23 @@ Page({
     availableShareClasses: [] as Array<{code: string, name: string, shareClass: string}>,
     currentShareClass: '',
     chartTs: 0 // 估值分时图缓存刷新戳
+  },
+
+  // 开启涨跌提醒：选阈值 → 一次性订阅 → 记录到云端
+  openAlert() {
+    const fund = this.data.fund;
+    if (!fund) return;
+    wx.showActionSheet({
+      itemList: ['涨跌 ±1% 提醒', '涨跌 ±3% 提醒', '涨跌 ±5% 提醒'],
+      success: async (res) => {
+        const pct = [1, 3, 5][res.tapIndex];
+        wx.showLoading({ title: '开启中', mask: true });
+        const r = await enableFundAlert(fund.code, fund.name, pct, pct);
+        wx.hideLoading();
+        const msg = r === 'ok' ? '已开启，命中后推送一次' : r === 'rejected' ? '未授权订阅' : '开启失败';
+        wx.showToast({ title: msg, icon: r === 'ok' ? 'success' : 'none' });
+      }
+    });
   },
 
   onLoad(options: any) {

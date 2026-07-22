@@ -22,6 +22,7 @@ module.exports = {
       <view class="fund-name">{{fund.name}}</view>
       <view class="fund-code-row">
         <text class="fund-code">{{fund.code}}</text>
+        <view class="alert-pill" bindtap="openAlert">🔔 涨跌提醒</view>
         <!-- 份额类别切换 / 删除持仓（仅从持仓页进入且有持仓时显示） -->
         <view wx:if="{{from === 'holding' && holding}}" class="switch-share-class" bindtap="showShareClassSelector">
           切换份额类别

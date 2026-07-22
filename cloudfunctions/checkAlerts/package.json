@@ -1,0 +1,9 @@
+{
+  "name": "checkAlerts",
+  "version": "1.0.0",
+  "description": "定时检查基金涨跌阈值并发订阅消息",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
