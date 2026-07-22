@@ -1,9 +1,12 @@
 // index.ts - 自选基金页面
-import { getBatchFundEstimate, FundInfo, getFundYearGrowth, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
+import { getBatchFundEstimate, FundInfo, getFundPeriodIncrease, isMarketActive, getMarketStatus, MarketStatus } from '../../utils/fundApi'
 import { getOptionalFunds, removeOptionalFund, getHoldingFunds, getImportedHoldings } from '../../utils/storage'
 
 interface FundDisplay extends FundInfo {
   yearGrowth?: number; // 近一年涨幅
+  m1?: number; // 近1月
+  m3?: number; // 近3月
+  y1?: number; // 近1年
   holdingAmount?: number; // 持有金额
   holdingProfit?: number; // 持有收益
   todayProfit?: number; // 今日收益
@@ -92,18 +95,19 @@ Page({
       const estimates = await getBatchFundEstimate(codes, { recordAccuracy: true });
       const estMap = new Map(estimates.map(e => [e.code, e]));
 
-      // 近一年涨幅是独立接口、无法批量，对已拿到估值的基金并发拉取（失败不影响主流程）
-      const yearGrowthEntries = await Promise.all(
-        Array.from(estMap.keys()).map(async (code): Promise<[string, number]> => {
+      // 阶段涨幅(近1月/3月/1年)独立接口、带缓存，对已拿到估值的基金并发拉取（失败不影响主流程）
+      const periodEntries = await Promise.all(
+        Array.from(estMap.keys()).map(async (code): Promise<[string, { m1: number; m3: number; y1: number }]> => {
           try {
-            return [code, await getFundYearGrowth(code)];
+            const p = await getFundPeriodIncrease(code);
+            const g = (label: string) => { const x = p.find((pp) => pp.label === label); return x ? x.syl : 0; };
+            return [code, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
           } catch (e) {
-            console.log('获取近一年涨幅失败:', code);
-            return [code, 0];
+            return [code, { m1: 0, m3: 0, y1: 0 }];
           }
         })
       );
-      const yearGrowthMap = new Map(yearGrowthEntries);
+      const periodMap = new Map(periodEntries);
 
       // 按自选顺序组装；无估值数据的（临时码/接口未返回）直接跳过
       const funds: FundDisplay[] = [];
@@ -111,7 +115,8 @@ Page({
         const fundInfo = estMap.get(f.code);
         if (!fundInfo) continue;
 
-        const yearGrowth = yearGrowthMap.get(f.code) || 0;
+        const per = periodMap.get(f.code) || { m1: 0, m3: 0, y1: 0 };
+        const yearGrowth = per.y1;
 
         // 关联持仓信息
         let holdingAmount = 0;
@@ -150,6 +155,9 @@ Page({
         funds.push({
           ...fundInfo,
           yearGrowth,
+          m1: per.m1,
+          m3: per.m3,
+          y1: per.y1,
           holdingAmount,
           holdingProfit,
           todayProfit

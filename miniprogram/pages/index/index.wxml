@@ -52,63 +52,44 @@ module.exports = {
   </view>
 
   <view wx:else class="fund-list">
-    <view class="list-header">
-      <view class="header-name">名称/代码</view>
-      <view class="header-value">估值<text class="header-hint">(预测)</text></view>
-      <view class="header-today">今日盈亏</view>
-      <view class="header-year">持仓/1年</view>
-    </view>
-
-    <scroll-view scroll-y class="list-body">
-      <view wx:for="{{funds}}" wx:key="code" class="list-item" bindtap="goToDetail" data-code="{{item.code}}">
-        <view class="item-name">
-          <view class="fund-name">{{item.name}}</view>
-          <view class="fund-code">
-            <text>{{item.code}}</text>
-            <text class="holding-tag" wx:if="{{item.holdingAmount > 0}}">持仓</text>
-          </view>
+    <!-- 横向滚动多列表：首列(名称)粘性固定，右侧列可左右滑动 -->
+    <scroll-view scroll-x class="tbl-scroll">
+      <view class="tbl">
+        <view class="trow thead">
+          <view class="c c-name">名称/代码</view>
+          <view class="c">估值</view>
+          <view class="c">今日</view>
+          <view class="c">近1月</view>
+          <view class="c">近3月</view>
+          <view class="c">近1年</view>
+          <view class="c">持有金额</view>
+          <view class="c">持有收益</view>
         </view>
-
-        <view class="item-value">
-          <view class="current-price">
-            {{utils.toFixed(item.estimatedValue, 4)}}
+        <view wx:for="{{funds}}" wx:key="code" class="trow" bindtap="goToDetail" data-code="{{item.code}}">
+          <view class="c c-name">
+            <text class="fund-name">{{item.name}}</text>
+            <view class="fund-code"><text>{{item.code}}</text><text class="holding-tag" wx:if="{{item.holdingAmount > 0}}">持仓</text></view>
+          </view>
+          <view class="c c-col">
+            <text class="cell-v">{{utils.toFixed(item.estimatedValue, 4)}}</text>
             <text class="est-tag" wx:if="{{item.estimateSource === 'computed'}}">自算</text>
             <text class="est-tag est-tag-nav" wx:elif="{{item.estimateSource === 'none'}}">净值</text>
           </view>
-          <view class="holding-amount" wx:if="{{item.holdingAmount > 0}}">
-            ¥{{utils.toFixed(item.holdingAmount, 0)}}
-          </view>
+          <view class="c {{item.estimatedGrowth >= 0 ? 'positive' : 'negative'}}">{{item.estimatedGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.estimatedGrowth, 2)}}%</view>
+          <view class="c {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</view>
+          <view class="c {{item.m3 >= 0 ? 'positive' : 'negative'}}">{{item.m3 >= 0 ? '+' : ''}}{{utils.toFixed(item.m3, 2)}}%</view>
+          <view class="c {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</view>
+          <view class="c">{{item.holdingAmount > 0 ? '¥' + utils.toFixed(item.holdingAmount, 0) : '-'}}</view>
+          <view class="c {{item.holdingProfit >= 0 ? 'positive' : 'negative'}}">{{item.holdingAmount > 0 ? (item.holdingProfit >= 0 ? '+' : '') + utils.toFixed(item.holdingProfit, 2) : '-'}}</view>
         </view>
-
-        <view class="item-today {{item.estimatedGrowth >= 0 ? 'positive' : 'negative'}}">
-          <view class="change-percent">{{item.estimatedGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.estimatedGrowth, 2)}}%</view>
-          <view class="profit-value" wx:if="{{item.holdingAmount > 0}}">
-            {{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}
-          </view>
-        </view>
-
-        <view class="item-year">
-          <block wx:if="{{item.holdingAmount > 0}}">
-            <view class="holding-profit {{item.holdingProfit >= 0 ? 'positive' : 'negative'}}">
-              {{item.holdingProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.holdingProfit, 2)}}
-            </view>
-            <view class="holding-rate {{item.holdingProfit >= 0 ? 'positive' : 'negative'}}" wx:if="{{item.holdingAmount > 0}}">
-              {{item.holdingProfit >= 0 ? '+' : ''}}{{utils.toFixed((item.holdingProfit / (item.holdingAmount - item.holdingProfit)) * 100, 2)}}%
-            </view>
-          </block>
-          <block wx:else>
-            <text class="{{item.yearGrowth >= 0 ? 'positive' : 'negative'}}" wx:if="{{item.yearGrowth !== undefined && item.yearGrowth !== 0}}">{{item.yearGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.yearGrowth, 2)}}%</text>
-            <text class="year-empty" wx:else>-</text>
-          </block>
-        </view>
-      </view>
-
-      <view class="data-source-bar">
-        <text class="ds-status ds-{{marketStatus}}">{{statusLabel || '--'}}</text>
-        <text wx:if="{{valuationTime}}" class="ds-item">估值 {{valuationTime}}</text>
-        <text wx:if="{{valuationDate}}" class="ds-item">净值 {{valuationDate}}</text>
-        <text class="ds-hint">估值仅为预测，盘后基金公司确认净值后更新；带「自算」为前十大重仓估算，非官方值</text>
       </view>
     </scroll-view>
+
+    <view class="data-source-bar">
+      <text class="ds-status ds-{{marketStatus}}">{{statusLabel || '--'}}</text>
+      <text wx:if="{{valuationTime}}" class="ds-item">估值 {{valuationTime}}</text>
+      <text wx:if="{{valuationDate}}" class="ds-item">净值 {{valuationDate}}</text>
+      <text class="ds-hint">← 左右滑动查看更多 · 估值为预测，带「自算」为重仓估算</text>
+    </view>
   </view>
 </scroll-view>

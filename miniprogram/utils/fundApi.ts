@@ -489,7 +489,11 @@ export interface PeriodPerf { label: string; syl: number; rank: number; sc: numb
 // FundMNPeriodIncrease 的 title → 中文；只取常用几档
 const PERIOD_MAP: Array<[string, string]> = [['Y', '近1月'], ['3Y', '近3月'], ['6Y', '近6月'], ['1N', '近1年'], ['3N', '近3年']];
 
+// 阶段业绩日内不变，缓存 6 小时，避免自选/持仓 30s 刷新重复拉取
+const periodCache = new Map<string, { ts: number; data: PeriodPerf[] }>();
 export function getFundPeriodIncrease(code: string): Promise<PeriodPerf[]> {
+  const c = periodCache.get(code);
+  if (c && Date.now() - c.ts < HOLDINGS_TTL) return Promise.resolve(c.data);
   return new Promise((resolve) => {
     wx.request({
       url: 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease',
@@ -513,6 +517,7 @@ export function getFundPeriodIncrease(code: string): Promise<PeriodPerf[]> {
               sc: parseInt(d.sc, 10) || 0
             });
           }
+          periodCache.set(code, { ts: Date.now(), data: out });
           resolve(out);
         } catch (e) {
           resolve([]);

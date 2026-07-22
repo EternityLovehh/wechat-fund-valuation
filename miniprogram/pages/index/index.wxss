@@ -340,3 +340,47 @@ page {
 }
 
 .est-tag-nav { color: #999; border-color: #ddd; background: #f5f5f5; }
+
+/* ===== 横向滚动多列表(养基宝式:首列粘性 + 右侧可滑动) ===== */
+.tbl-scroll { width: 100%; background: #fff; }
+.tbl { width: 1130rpx; }   /* 名称210 + 8列×115 = 1130 */
+.trow {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1rpx solid #f5f5f5;
+  background: #fff;
+}
+.trow:active { background: #f8f9fa; }
+.thead { background: #f8f8f8; }
+.thead .c { color: #999; font-size: 22rpx; padding: 16rpx 6rpx; }
+.c {
+  width: 115rpx;
+  flex: none;
+  box-sizing: border-box;
+  padding: 18rpx 6rpx;
+  font-size: 24rpx;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+/* 首列粘性固定 */
+.c-name {
+  width: 210rpx;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  text-align: left;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+.thead .c-name { background: #f8f8f8; }
+.c-col { flex-direction: column; align-items: flex-end; justify-content: center; }
+.cell-v { color: #333; }
+.c-name .fund-name {
+  font-size: 24rpx; font-weight: 600; color: #333;
+  max-width: 196rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.c-name .fund-code { font-size: 20rpx; color: #999; margin-top: 4rpx; display: flex; align-items: center; gap: 8rpx; }
