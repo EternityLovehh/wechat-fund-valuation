@@ -8,7 +8,7 @@
     {
       "name": "checkAlertsTimer",
       "type": "timer",
-      "config": "0 */5 9-15 * * * *"
+      "config": "0 */30 9-15 * * * *"
     }
   ]
 }

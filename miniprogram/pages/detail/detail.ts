@@ -40,21 +40,15 @@ Page({
     chartTs: 0 // 估值分时图缓存刷新戳
   },
 
-  // 开启涨跌提醒：选阈值 → 一次性订阅 → 记录到云端
-  openAlert() {
+  // 开启涨跌提醒：默认 ±3%，一键一次性订阅并记录到云端
+  async openAlert() {
     const fund = this.data.fund;
     if (!fund) return;
-    wx.showActionSheet({
-      itemList: ['涨跌 ±1% 提醒', '涨跌 ±3% 提醒', '涨跌 ±5% 提醒'],
-      success: async (res) => {
-        const pct = [1, 3, 5][res.tapIndex];
-        wx.showLoading({ title: '开启中', mask: true });
-        const r = await enableFundAlert(fund.code, fund.name, pct, pct);
-        wx.hideLoading();
-        const msg = r === 'ok' ? '已开启，命中后推送一次' : r === 'rejected' ? '未授权订阅' : '开启失败';
-        wx.showToast({ title: msg, icon: r === 'ok' ? 'success' : 'none' });
-      }
-    });
+    wx.showLoading({ title: '开启中', mask: true });
+    const r = await enableFundAlert(fund.code, fund.name, 3, 3);
+    wx.hideLoading();
+    const msg = r === 'ok' ? '已按 ±3% 开启，命中后推送一次' : r === 'rejected' ? '未授权订阅' : '开启失败';
+    wx.showToast({ title: msg, icon: r === 'ok' ? 'success' : 'none' });
   },
 
   onLoad(options: any) {
