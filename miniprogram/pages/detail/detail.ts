@@ -1,5 +1,5 @@
 // detail.ts - 基金详情页面
-import { getFundEstimate, FundInfo, getFundHoldings, getFundIndustry, getFundYearGrowth, getBatchStockQuotes } from '../../utils/fundApi'
+import { getFundEstimate, FundInfo, getFundHoldings, getFundIndustry, getFundYearGrowth, getBatchStockQuotes, getFundBaseInfo, getFundPeriodIncrease, FundBaseInfo, PeriodPerf } from '../../utils/fundApi'
 import { getHoldingFunds, removeHolding, getImportedHoldings, saveImportedHolding, removeImportedHolding, addOptionalFund } from '../../utils/storage'
 import { normalizeHolding } from '../../utils/holdingCalc'
 import { getTodayStr } from '../../utils/appDate'
@@ -37,7 +37,9 @@ Page({
     showShareClassModal: false,
     availableShareClasses: [] as Array<{code: string, name: string, shareClass: string}>,
     currentShareClass: '',
-    chartTs: 0 // 估值分时图缓存刷新戳
+    chartTs: 0, // 估值分时图缓存刷新戳
+    baseInfo: null as FundBaseInfo | null, // 基本信息补全
+    periods: [] as PeriodPerf[] // 阶段业绩+排名
   },
 
   // 开启涨跌提醒：默认 ±3%，一键一次性订阅并记录到云端
@@ -289,6 +291,17 @@ Page({
       this.setData({ yearGrowth });
     } catch (e) {
       console.error('获取近一年涨幅失败:', e);
+    }
+
+    // 基本信息 + 阶段业绩排名（详情补全）
+    try {
+      const [baseInfo, periods] = await Promise.all([
+        getFundBaseInfo(this.data.code),
+        getFundPeriodIncrease(this.data.code)
+      ]);
+      this.setData({ baseInfo, periods });
+    } catch (e) {
+      console.error('获取基金详情补全失败:', e);
     }
   },
 

@@ -40,6 +40,30 @@ module.exports = {
       <view class="gsz-chart-tip">东方财富官方估值分时图，盘中约每分钟更新</view>
     </view>
 
+    <!-- 阶段业绩 + 同类排名 -->
+    <view wx:if="{{fund && periods.length > 0}}" class="perf-card">
+      <view class="perf-title">阶段业绩 <text class="perf-sub">涨幅 · 同类排名</text></view>
+      <view wx:for="{{periods}}" wx:key="label" class="perf-row">
+        <text class="perf-label">{{item.label}}</text>
+        <text class="perf-syl {{item.syl >= 0 ? 'positive' : 'negative'}}">{{item.syl >= 0 ? '+' : ''}}{{utils.toFixed(item.syl, 2)}}%</text>
+        <text class="perf-rank">{{item.rank}}/{{item.sc}}</text>
+      </view>
+    </view>
+
+    <!-- 基本信息 -->
+    <view wx:if="{{baseInfo}}" class="info-card">
+      <view class="info-title">基本信息</view>
+      <view class="info-grid">
+        <view class="info-item"><text class="info-k">基金公司</text><text class="info-v">{{baseInfo.company || '--'}}</text></view>
+        <view class="info-item"><text class="info-k">基金经理</text><text class="info-v">{{baseInfo.manager || '--'}}</text></view>
+        <view class="info-item"><text class="info-k">成立日期</text><text class="info-v">{{baseInfo.estabDate || '--'}}</text></view>
+        <view class="info-item"><text class="info-k">最新规模</text><text class="info-v">{{utils.toFixed(baseInfo.scaleYi, 2)}}亿</text></view>
+        <view class="info-item"><text class="info-k">风险等级</text><text class="info-v">{{baseInfo.riskLabel || '--'}}</text></view>
+        <view class="info-item"><text class="info-k">类型</text><text class="info-v">{{baseInfo.fundType || '--'}}</text></view>
+      </view>
+      <view wx:if="{{baseInfo.bench}}" class="info-bench">业绩基准：{{baseInfo.bench}}</view>
+    </view>
+
     <!-- 三列数据展示区 -->
     <view wx:if="{{fund}}" class="data-grid">
       <!-- 第一行：基金基本数据（所有用户可见） -->

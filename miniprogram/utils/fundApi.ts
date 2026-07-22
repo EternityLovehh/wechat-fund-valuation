@@ -353,6 +353,94 @@ function getFundStockRatio(code: string): Promise<number | null> {
   });
 }
 
+// ===== 基金详情补全：基本信息 + 阶段业绩排名 =====
+export interface FundBaseInfo {
+  company: string;   // 基金公司
+  manager: string;   // 现任经理
+  estabDate: string; // 成立日
+  scaleYi: number;   // 最新规模(亿元)
+  scaleDate: string; // 规模日期
+  riskLabel: string; // 风险等级(中文)
+  fundType: string;  // 类型
+  bench: string;     // 业绩比较基准
+}
+const RISK_LABELS: Record<string, string> = { '1': '低风险', '2': '中低风险', '3': '中风险', '4': '中高风险', '5': '高风险' };
+const baseInfoCache = new Map<string, { ts: number; info: FundBaseInfo | null }>();
+
+export function getFundBaseInfo(code: string): Promise<FundBaseInfo | null> {
+  const c = baseInfoCache.get(code);
+  if (c && Date.now() - c.ts < HOLDINGS_TTL) return Promise.resolve(c.info);
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNDetailInformation',
+      method: 'GET',
+      data: { FCODE: code, deviceid: 'wx', plat: 'Android', product: 'EFund', version: '1', _: Date.now() },
+      success: (res: any) => {
+        try {
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const d = p && p.Datas;
+          if (!d || !d.SHORTNAME) { resolve(null); return; }
+          const clean = (v: any) => (v == null || v === '--' ? '' : String(v));
+          const info: FundBaseInfo = {
+            company: clean(d.JJGS),
+            manager: clean(d.JJJL),
+            estabDate: clean(d.ESTABDATE),
+            scaleYi: (parseFloat(d.ENDNAV) || 0) / 1e8,
+            scaleDate: clean(d.FEGMRQ),
+            riskLabel: RISK_LABELS[String(d.RISKLEVEL)] || clean(d.RISKLEVEL),
+            fundType: clean(d.FTYPE),
+            bench: clean(d.BENCH)
+          };
+          baseInfoCache.set(code, { ts: Date.now(), info });
+          resolve(info);
+        } catch (e) {
+          resolve(null);
+        }
+      },
+      fail: () => resolve(null)
+    });
+  });
+}
+
+export interface PeriodPerf { label: string; syl: number; rank: number; sc: number }
+// FundMNPeriodIncrease 的 title → 中文；只取常用几档
+const PERIOD_MAP: Array<[string, string]> = [['Y', '近1月'], ['3Y', '近3月'], ['6Y', '近6月'], ['1N', '近1年'], ['3N', '近3年']];
+
+export function getFundPeriodIncrease(code: string): Promise<PeriodPerf[]> {
+  return new Promise((resolve) => {
+    wx.request({
+      url: 'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease',
+      method: 'GET',
+      data: { FCODE: code, deviceid: 'wx', plat: 'Android', product: 'EFund', version: '1', _: Date.now() },
+      success: (res: any) => {
+        try {
+          let p: any = res.data;
+          if (typeof p === 'string') p = JSON.parse(p);
+          const list = (p && p.Datas) || [];
+          const byTitle = new Map(list.map((d: any) => [String(d.title), d]));
+          const out: PeriodPerf[] = [];
+          for (const [title, label] of PERIOD_MAP) {
+            const d: any = byTitle.get(title);
+            if (!d) continue;
+            const syl = parseFloat(d.syl);
+            out.push({
+              label,
+              syl: isNaN(syl) ? 0 : syl,
+              rank: parseInt(d.rank, 10) || 0,
+              sc: parseInt(d.sc, 10) || 0
+            });
+          }
+          resolve(out);
+        } catch (e) {
+          resolve([]);
+        }
+      },
+      fail: () => resolve([])
+    });
+  });
+}
+
 // 行业配置缓存（季度披露）
 const sectorCache = new Map<string, { ts: number; sectors: Array<{ name: string; ratio: number }> }>();
 
