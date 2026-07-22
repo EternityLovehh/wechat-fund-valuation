@@ -64,20 +64,26 @@ exports.main = async () => {
 
   const time = beijingNow();
   const today = time.slice(0, 10);
+  // event.state 可覆盖 miniprogramState:测试体验版传 "trial",正式版 "formal",开发版 "developer"
+  const miniprogramState = (event && event.state) || 'trial';
   let sent = 0;
+  const debug = []; // 每个用户的诊断信息(测试时看返回即可定位)
 
   for (const u of users.data) {
-    if (u.lastSentDate === today) continue; // 当日已推,去重
+    const info = { openid: String(u.openid || '').slice(0, 8) + '…', codes: (u.codes || []).length };
+    if (u.lastSentDate === today) { info.skip = 'already-sent-today'; debug.push(info); continue; }
     const codes = Array.isArray(u.codes) ? u.codes : [];
-    if (!codes.length) continue;
+    if (!codes.length) { info.skip = 'no-codes'; debug.push(info); continue; }
     const up = u.upPct;
     const down = u.downPct;
 
     // 收集命中项
     const hits = [];
+    let matched = 0;
     for (const code of codes) {
       const est = gz.map[code];
       if (!est || est.gszzl == null) continue;
+      matched++;
       const g = est.gszzl;
       const hitUp = up != null && up > 0 && g >= up;
       const hitDown = down != null && down > 0 && g <= -Math.abs(down);
@@ -86,7 +92,9 @@ exports.main = async () => {
         hits.push({ code, g, gsz: est.gsz, name: nm, dir: hitUp ? 'up' : 'down' });
       }
     }
-    if (!hits.length) continue;
+    info.matchedInGZ = matched; // 有多少只在估值表里找到
+    info.hits = hits.length;
+    if (!hits.length) { info.skip = 'no-hit'; debug.push(info); continue; }
 
     // 取涨跌幅度最大的一只作为主体
     hits.sort((a, b) => Math.abs(b.g) - Math.abs(a.g));
@@ -96,11 +104,11 @@ exports.main = async () => {
       : (top.dir === 'up' ? '涨幅达到提醒线' : '跌幅达到提醒线');
 
     try {
-      await cloud.openapi.subscribeMessage.send({
+      const r = await cloud.openapi.subscribeMessage.send({
         touser: u.openid,
         templateId: TEMPLATE_ID,
         page: 'pages/holding/holding',
-        miniprogramState: 'formal',
+        miniprogramState,
         data: {
           thing6: { value: String(top.name).slice(0, 20) },
           character_string8: { value: `${top.g >= 0 ? '+' : ''}${top.g.toFixed(2)}%` },
@@ -109,13 +117,23 @@ exports.main = async () => {
           thing10: { value: desc.slice(0, 20) }
         }
       });
-      await db.collection('fund_alerts').doc(u._id).update({
-        data: { quota: _.inc(-1), lastSentAt: Date.now(), lastSentDate: today }
-      });
-      sent++;
+      info.sendErrCode = (r && r.errCode) || 0;
+      info.sendErrMsg = (r && r.errMsg) || '';
+      if (!r || r.errCode === 0 || r.errCode == null) {
+        await db.collection('fund_alerts').doc(u._id).update({
+          data: { quota: _.inc(-1), lastSentAt: Date.now(), lastSentDate: today }
+        });
+        sent++;
+        info.result = 'sent';
+      } else {
+        info.result = 'send-failed';
+      }
     } catch (e) {
-      // 单个用户失败不影响其他
+      info.result = 'exception';
+      info.errCode = (e && e.errCode) || '';
+      info.errMsg = (e && (e.errMsg || e.message)) || String(e);
     }
+    debug.push(info);
   }
-  return { sent, users: users.data.length, gzrq: gz.gzrq };
+  return { sent, users: users.data.length, state: miniprogramState, gzrq: gz.gzrq, debug };
 };
