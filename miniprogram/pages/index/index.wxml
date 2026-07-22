@@ -59,33 +59,35 @@ module.exports = {
           <view class="c c-name">名称/代码</view>
           <view class="c">估值</view>
           <view class="c">今日</view>
-          <view class="c c-board">关联板块</view>
+          <view class="c">关联板块</view>
           <view class="c">近1月</view>
-          <view class="c">近3月</view>
           <view class="c">近1年</view>
           <view class="c">持有金额</view>
-          <view class="c">持有收益</view>
         </view>
         <view wx:for="{{funds}}" wx:key="code" class="trow" bindtap="goToDetail" data-code="{{item.code}}">
           <view class="c c-name">
             <text class="fund-name">{{item.name}}</text>
-            <view class="fund-code"><text>{{item.code}}</text><text class="holding-tag" wx:if="{{item.holdingAmount > 0}}">持仓</text></view>
+            <view class="fund-sub"><text>{{item.code}}</text><text class="holding-tag" wx:if="{{item.holdingAmount > 0}}">持仓</text></view>
           </view>
-          <view class="c c-col">
-            <text class="cell-v">{{utils.toFixed(item.estimatedValue, 4)}}</text>
-            <text class="est-tag" wx:if="{{item.estimateSource === 'computed'}}">自算</text>
-            <text class="est-tag est-tag-nav" wx:elif="{{item.estimateSource === 'none'}}">净值</text>
+          <!-- 估值: 净值(大) + 来源标签(小) -->
+          <view class="c">
+            <text class="cell-top dark">{{utils.toFixed(item.estimatedValue, 4)}}</text>
+            <text class="cell-sub" wx:if="{{item.estimateSource === 'computed'}}">自算</text>
+            <text class="cell-sub" wx:elif="{{item.estimateSource === 'none'}}">净值</text>
           </view>
-          <view class="c {{item.estimatedGrowth >= 0 ? 'positive' : 'negative'}}">{{item.estimatedGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.estimatedGrowth, 2)}}%</view>
-          <view class="c c-board c-col">
-            <text class="board-name">{{item.board || '-'}}</text>
-            <text wx:if="{{item.board}}" class="{{item.boardChange == null ? '' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
+          <!-- 今日: 涨幅(大) + 今日收益(小,持仓时) -->
+          <view class="c">
+            <text class="cell-top {{item.estimatedGrowth >= 0 ? 'positive' : 'negative'}}">{{item.estimatedGrowth >= 0 ? '+' : ''}}{{utils.toFixed(item.estimatedGrowth, 2)}}%</text>
+            <text class="cell-sub {{item.todayProfit >= 0 ? 'positive' : 'negative'}}" wx:if="{{item.holdingAmount > 0}}">{{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}</text>
           </view>
-          <view class="c {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</view>
-          <view class="c {{item.m3 >= 0 ? 'positive' : 'negative'}}">{{item.m3 >= 0 ? '+' : ''}}{{utils.toFixed(item.m3, 2)}}%</view>
-          <view class="c {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</view>
-          <view class="c">{{item.holdingAmount > 0 ? '¥' + utils.toFixed(item.holdingAmount, 0) : '-'}}</view>
-          <view class="c {{item.holdingProfit >= 0 ? 'positive' : 'negative'}}">{{item.holdingAmount > 0 ? (item.holdingProfit >= 0 ? '+' : '') + utils.toFixed(item.holdingProfit, 2) : '-'}}</view>
+          <!-- 关联板块: 板块涨跌(大) + 板块名(小) -->
+          <view class="c">
+            <text class="cell-top {{item.boardChange == null ? 'muted' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
+            <text class="cell-sub">{{item.board || '-'}}</text>
+          </view>
+          <view class="c"><text class="cell-top {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</text></view>
+          <view class="c"><text class="cell-top {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</text></view>
+          <view class="c"><text class="cell-top dark">{{item.holdingAmount > 0 ? '¥' + utils.toFixed(item.holdingAmount, 0) : '-'}}</text></view>
         </view>
       </view>
     </scroll-view>

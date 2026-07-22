@@ -391,3 +391,39 @@ page {
 
 .c { white-space: nowrap; } /* col: 防百分比换行错位 */
 .trow { min-height: 96rpx; }
+
+/* ===== 养基宝式表格(覆盖前版:大字/高行/两行单元格) ===== */
+.tbl { width: 1110rpx; }
+.trow {
+  display: flex; align-items: stretch;
+  border-bottom: 1rpx solid #eef0f3; background: #fff;
+}
+.trow:active { background: #f8f9fa; }
+.thead { background: #fff; }
+.thead .c { color: #999; font-size: 24rpx; font-weight: 400; padding: 20rpx 12rpx; }
+.c {
+  width: 150rpx; flex: none; box-sizing: border-box;
+  padding: 26rpx 12rpx; white-space: nowrap;
+  display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+}
+.trow .c:nth-child(3) { width: 140rpx; } /* 今日 */
+.trow .c:nth-child(4) { width: 160rpx; } /* 关联板块 */
+.trow .c:nth-child(5), .trow .c:nth-child(6) { width: 120rpx; } /* 近1月/近1年 */
+.trow .c:nth-child(7) { width: 160rpx; } /* 持有金额 */
+
+.c-name {
+  width: 260rpx; position: sticky; left: 0; z-index: 2; background: #fff;
+  align-items: flex-start; justify-content: center; padding-left: 24rpx;
+}
+.thead .c-name { background: #fff; }
+.c-name .fund-name {
+  font-size: 30rpx; font-weight: 600; color: #333; line-height: 1.3;
+  max-width: 236rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.fund-sub { font-size: 22rpx; color: #bbb; margin-top: 8rpx; display: flex; align-items: center; gap: 10rpx; }
+
+.cell-top { font-size: 30rpx; font-weight: 600; line-height: 1.25; }
+.cell-sub { font-size: 22rpx; margin-top: 8rpx; color: #999; }
+.cell-top.dark { color: #333; }
+.cell-top.muted { color: #bbb; font-weight: 400; }
+.holding-tag { font-size: 18rpx; color: #2196f3; background: #e3f2fd; padding: 0 8rpx; border-radius: 4rpx; }
