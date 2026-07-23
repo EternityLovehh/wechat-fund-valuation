@@ -113,7 +113,9 @@ Page({
 
       // 关联板块(主板块 + 加权今日涨跌)；失败返回空 Map,不影响主流程
       let boardMap = new Map<string, { board: string; change: number | null }>();
-      try { boardMap = await getFundBoards(Array.from(estMap.keys())); } catch (e) { /* 忽略 */ }
+      const nameMap: Record<string, string> = {};
+      estMap.forEach((v, k) => { nameMap[k] = v.name; });
+      try { boardMap = await getFundBoards(Array.from(estMap.keys()), nameMap); } catch (e) { /* 忽略 */ }
 
       // 按自选顺序组装；无估值数据的（临时码/接口未返回）直接跳过
       const funds: FundDisplay[] = [];

@@ -337,6 +337,8 @@ Page({
 
       // 阶段涨幅(近1月/3月/1年) + 关联板块(主板块+加权涨跌)，附加到每条持仓
       const holdCodes = Array.from(new Set(allHoldings.map((h) => h.code).filter((c) => /^\d{6}$/.test(c))));
+      const boardNameMap: Record<string, string> = {};
+      allHoldings.forEach((h) => { if (h.name) boardNameMap[h.code] = h.name; });
       const [periodArr, boards] = await Promise.all([
         Promise.all(
           holdCodes.map(async (c): Promise<[string, { m1: number; m3: number; y1: number }]> => {
@@ -349,7 +351,7 @@ Page({
             }
           })
         ),
-        getFundBoards(holdCodes).catch(() => new Map<string, { board: string; change: number | null }>())
+        getFundBoards(holdCodes, boardNameMap).catch(() => new Map<string, { board: string; change: number | null }>())
       ]);
       const periodMap = new Map(periodArr);
       allHoldings.forEach((h) => {

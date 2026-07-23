@@ -559,7 +559,100 @@ export function getFundSectorAllocation(code: string): Promise<Array<{ name: str
   });
 }
 
-// ===== 关联板块：个股所属板块(f127) → 基金主板块 + 加权涨跌 =====
+// ===== 关联板块：三级链 =====
+//  ① 基金名/跟踪指数关键词 → 主题(指数/ETF/主题基金,细度来自这里)
+//  ② 持仓概念(个股 f127)按权重聚合:集中→用细概念(如"半导体设备"),分散→回退①
+//  ③ 申万行业兜底(getFundSectorAllocation)
+// 主题关键词表:顺序敏感(先具体后宽泛);命中即返回。匹配基金名(大写归一)。
+const THEME_RULES: Array<{ kw: string[]; label: string }> = [
+  // —— 半导体/电子(细分优先) ——
+  { kw: ['半导体设备'], label: '半导体设备' },
+  { kw: ['半导体材料'], label: '半导体材料' },
+  { kw: ['芯片', '集成电路'], label: '芯片' },
+  { kw: ['半导体'], label: '半导体' },
+  { kw: ['CPO', '光模块', '光通信'], label: '光通信' },
+  { kw: ['PCB'], label: 'PCB' },
+  { kw: ['消费电子'], label: '消费电子' },
+  { kw: ['电子'], label: '电子' },
+  { kw: ['通信'], label: '通信' },
+  // —— 新能源系 ——
+  { kw: ['光伏'], label: '光伏' },
+  { kw: ['储能'], label: '储能' },
+  { kw: ['锂电', '电池'], label: '锂电池' },
+  { kw: ['新能源车', '新能源汽车', '智能汽车', '新能车'], label: '新能源车' },
+  { kw: ['新能源'], label: '新能源' },
+  { kw: ['汽车'], label: '汽车' },
+  // —— 消费/食品饮料 ——
+  { kw: ['白酒'], label: '白酒' },
+  { kw: ['食品饮料', '食品'], label: '食品饮料' },
+  { kw: ['家电'], label: '家电' },
+  { kw: ['消费'], label: '消费' },
+  // —— 医药系 ——
+  { kw: ['创新药'], label: '创新药' },
+  { kw: ['生物医药', '生物科技', '生物'], label: '生物医药' },
+  { kw: ['医疗器械'], label: '医疗器械' },
+  { kw: ['医疗', '医药', '医健'], label: '医药' },
+  // —— 金融地产 ——
+  { kw: ['证券', '券商'], label: '证券' },
+  { kw: ['银行'], label: '银行' },
+  { kw: ['保险'], label: '保险' },
+  { kw: ['金融'], label: '金融' },
+  { kw: ['房地产', '地产'], label: '房地产' },
+  // —— 科技/AI/军工/机器人 ——
+  { kw: ['人工智能', 'AI'], label: '人工智能' },
+  { kw: ['大数据', '云计算'], label: '云计算' },
+  { kw: ['计算机', '软件'], label: '计算机' },
+  { kw: ['机器人'], label: '机器人' },
+  { kw: ['军工', '国防', '航天', '航空'], label: '军工' },
+  { kw: ['传媒', '游戏'], label: '传媒' },
+  // —— 资源周期/公用 ——
+  { kw: ['稀土'], label: '稀土' },
+  { kw: ['黄金'], label: '黄金' },
+  { kw: ['有色'], label: '有色金属' },
+  { kw: ['煤炭'], label: '煤炭' },
+  { kw: ['钢铁'], label: '钢铁' },
+  { kw: ['化工'], label: '化工' },
+  { kw: ['电力', '公用事业'], label: '电力' },
+  { kw: ['原油', '石油'], label: '原油' },
+  // —— 宽基/风格(用完整词,避免裸数字误判) ——
+  { kw: ['科创50', '科创板50'], label: '科创50' },
+  { kw: ['科创100'], label: '科创100' },
+  { kw: ['科创'], label: '科创板' },
+  { kw: ['创业板50'], label: '创业板50' },
+  { kw: ['创业板'], label: '创业板' },
+  { kw: ['沪深300'], label: '沪深300' },
+  { kw: ['中证500'], label: '中证500' },
+  { kw: ['中证1000'], label: '中证1000' },
+  { kw: ['中证2000'], label: '中证2000' },
+  { kw: ['中证800'], label: '中证800' },
+  { kw: ['上证50'], label: '上证50' },
+  { kw: ['上证180'], label: '上证180' },
+  { kw: ['红利', '股息'], label: '红利' },
+  { kw: ['价值'], label: '价值' },
+  { kw: ['成长'], label: '成长' },
+  // —— QDII/海外 ——
+  { kw: ['纳斯达克', '纳指'], label: '纳斯达克' },
+  { kw: ['标普500', '标普'], label: '标普500' },
+  { kw: ['恒生科技'], label: '恒生科技' },
+  { kw: ['恒生医疗', '恒生医药'], label: '恒生医药' },
+  { kw: ['恒生', '港股', 'H股'], label: '港股' },
+  { kw: ['中概', '中国互联网'], label: '中概互联' },
+  { kw: ['日经', '日本'], label: '日本' },
+  { kw: ['德国', '法国', '欧洲'], label: '欧洲' }
+];
+
+// 基金名 → 主题标签(命中返回,否则空)
+function themeFromName(name: string): string {
+  const n = (name || '').toUpperCase();
+  if (!n) return '';
+  for (const r of THEME_RULES) {
+    for (const k of r.kw) {
+      if (n.indexOf(k.toUpperCase()) >= 0) return r.label;
+    }
+  }
+  return '';
+}
+
 // 板块归属很稳定，缓存 7 天；push2 不稳时失败返回空、下次再补
 const stockBoardCache = new Map<string, { ts: number; board: string }>();
 const STOCK_BOARD_TTL = 7 * 24 * 60 * 60 * 1000; // 取到板块名后缓存 7 天(板块归属稳定)
@@ -599,26 +692,30 @@ function getStockBoard(code: string): Promise<string> {
   });
 }
 
-// 批量:每只基金 → 主板块(前5大重仓里权重最高的板块) + 该板块加权今日涨跌
-export async function getFundBoards(codes: string[]): Promise<Map<string, { board: string; change: number | null }>> {
+// 批量:每只基金 → 关联板块(三级链) + 前5大重仓加权今日涨跌
+// nameMap: code→基金名(用于①名称/指数主题匹配);调用方从估值结果传入。
+export async function getFundBoards(
+  codes: string[],
+  nameMap: Record<string, string> = {}
+): Promise<Map<string, { board: string; change: number | null }>> {
   const out = new Map<string, { board: string; change: number | null }>();
   const valid = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
   if (valid.length === 0) return out;
 
   const holdingsList = await Promise.all(valid.map((c) => getTopHoldingsWeighted(c)));
-  const fundTop = valid.map((c, i) => ({ code: c, top: holdingsList[i].slice(0, 5) }));
+  // 概念聚合用全部(≤10)持仓;涨跌%用前5大
+  const fundTop = valid.map((c, i) => ({ code: c, name: nameMap[c] || '', top: holdingsList[i] }));
   const stockCodes = Array.from(new Set(fundTop.flatMap((f) => f.top.map((s) => s.code))));
-  if (stockCodes.length === 0) return out;
 
-  const boards = await Promise.all(stockCodes.map((c) => getStockBoard(c)));
+  const boards = stockCodes.length ? await Promise.all(stockCodes.map((c) => getStockBoard(c))) : [];
   const boardMap = new Map(stockCodes.map((c, i) => [c, boards[i]]));
-  const changeMap = await getBatchStockChangeMap(stockCodes);
+  const changeMap = stockCodes.length ? await getBatchStockChangeMap(stockCodes) : new Map<string, number>();
 
   for (const f of fundTop) {
-    // 板块今日涨跌 = 前5大重仓的加权今日涨跌(腾讯行情,稳定)
+    // 涨跌% = 前5大重仓的加权今日涨跌(腾讯行情,稳定)
     let w = 0;
     let cw = 0;
-    for (const s of f.top) {
+    for (const s of f.top.slice(0, 5)) {
       const chg = changeMap.get(s.code);
       if (chg != null && Number.isFinite(chg) && Math.abs(chg) <= 30) {
         w += s.weight;
@@ -626,19 +723,32 @@ export async function getFundBoards(codes: string[]): Promise<Map<string, { boar
       }
     }
     const change = w > 0 ? cw / w : null;
-    // 板块名:优先 push2 f127 细分板块(如"白酒Ⅱ");权重最高者为主板块
+
+    // ② 概念聚合(全部持仓的 f127,按权重):找主导概念及其占比
     const bw = new Map<string, number>();
+    let boardedW = 0;
     for (const s of f.top) {
       const b = boardMap.get(s.code) || '';
-      if (b) bw.set(b, (bw.get(b) || 0) + s.weight);
+      if (b) { bw.set(b, (bw.get(b) || 0) + s.weight); boardedW += s.weight; }
     }
     let dom = '';
     let mw = 0;
     bw.forEach((wt, b) => { if (wt > mw) { mw = wt; dom = b; } });
-    out.set(f.code, { board: dom, change });
+    const domShare = boardedW > 0 ? mw / boardedW : 0;
+
+    // ① 名称/指数主题
+    const nameTheme = themeFromName(f.name);
+
+    // 决策:概念集中(≥50%)→细概念;否则名称主题(宽基指数名);再否则退而求其次用概念
+    let board = '';
+    if (domShare >= 0.5 && dom) board = dom;
+    else if (nameTheme) board = nameTheme;
+    else if (dom) board = dom;
+
+    out.set(f.code, { board, change });
   }
 
-  // 行业兜底:push2 f127 没拿到板块名的基金,用行业配置(fundmobapi,稳定但较粗)填名,避免整列空
+  // ③ 申万行业兜底:前两级都空的,用行业配置(fundmobapi,稳定但较粗)填名,避免整列空
   const needFb = fundTop.filter((f) => { const o = out.get(f.code); return !o || !o.board; });
   if (needFb.length) {
     const secs = await Promise.all(needFb.map((f) => getFundSectorAllocation(f.code).catch(() => [])));
