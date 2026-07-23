@@ -18,7 +18,7 @@ Page({
   data: {
     funds: [] as FundDisplay[],
     loading: false,
-    enriched: false, // 阶段涨幅/关联板块是否已补齐(第二段渲染)
+    boardReady: false, // 关联板块(慢)是否已补齐;阶段涨幅在第一段就绪
     refreshing: false, // 下拉刷新状态
     scrollLeft: 0,
     scrollTop: 0,
@@ -171,35 +171,35 @@ Page({
         valuationDate: latestValuationDate ? latestValuationDate.slice(5) : ''
       };
 
-      // ===== 第一段(仅首次加载):估值就绪即渲染核心列 + 关骨架屏;周期/板块占位 =====
-      // 30s 自动刷新时已有数据,跳过本段,避免占位符 `··` 每次闪一下。
+      // ===== 第一段:估值 + 阶段涨幅(有缓存,快)就绪即渲染 + 关骨架屏;仅"关联板块"延后 =====
+      const periodEntries = await Promise.all(
+        Array.from(estMap.keys()).map(async (code): Promise<[string, Per]> => {
+          try {
+            const p = await getFundPeriodIncrease(code);
+            const g = (label: string) => { const x = p.find((pp) => pp.label === label); return x ? x.syl : 0; };
+            return [code, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
+          } catch (e) {
+            return [code, { m1: 0, m3: 0, y1: 0 }];
+          }
+        })
+      );
+      const periodMap = new Map<string, Per>(periodEntries);
+
+      // 首次加载:先出表(板块占位);30s 刷新:不降级,等第二段一次性更新(避免板块闪成 --)
       const firstLoad = this.data.funds.length === 0;
       if (firstLoad) {
         if (seq !== this.loadSeq) return;
-        this.setData({ funds: assemble(new Map(), new Map()), enriched: false, loading: false, ...statusFields });
+        this.setData({ funds: assemble(periodMap, new Map()), boardReady: false, loading: false, ...statusFields });
       }
 
-      // ===== 第二段:阶段涨幅 + 关联板块(较慢),后台并发拉取后补齐 =====
+      // ===== 第二段:关联板块(慢:持仓→f127→行情),补齐后翻 boardReady =====
       const nameMap: Record<string, string> = {};
       estMap.forEach((v, k) => { nameMap[k] = v.name; });
-      const [periodEntries, boardMap] = await Promise.all([
-        Promise.all(
-          Array.from(estMap.keys()).map(async (code): Promise<[string, Per]> => {
-            try {
-              const p = await getFundPeriodIncrease(code);
-              const g = (label: string) => { const x = p.find((pp) => pp.label === label); return x ? x.syl : 0; };
-              return [code, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
-            } catch (e) {
-              return [code, { m1: 0, m3: 0, y1: 0 }];
-            }
-          })
-        ),
-        getFundBoards(Array.from(estMap.keys()), nameMap).catch(() => new Map<string, { board: string; change: number | null }>())
-      ]);
-      const periodMap = new Map<string, Per>(periodEntries);
+      const boardMap = await getFundBoards(Array.from(estMap.keys()), nameMap)
+        .catch(() => new Map<string, { board: string; change: number | null }>());
 
       if (seq !== this.loadSeq) return;
-      this.setData({ funds: assemble(periodMap, boardMap), enriched: true, loading: false, ...statusFields });
+      this.setData({ funds: assemble(periodMap, boardMap), boardReady: true, loading: false, ...statusFields });
     } catch (e) {
       console.error('加载自选失败:', e);
       wx.showToast({ title: '加载失败', icon: 'none' });
