@@ -91,8 +91,11 @@ module.exports = {
             </block>
           </view>
           <view class="c c-bd">
-            <text class="cell-top {{item.boardChange == null ? 'muted' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
-            <text class="cell-sub">{{item.board || '-'}}</text>
+            <block wx:if="{{boardReady}}">
+              <text class="cell-top {{item.boardChange == null ? 'muted' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
+              <text class="cell-sub">{{item.board || '-'}}</text>
+            </block>
+            <text wx:else class="cell-top muted">··</text>
           </view>
           <view class="c c-earn">
             <block wx:if="{{item.pendingAmount > 0 && !item.shares}}"><text class="cell-top muted">确认中</text></block>

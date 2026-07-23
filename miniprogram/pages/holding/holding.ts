@@ -58,7 +58,8 @@ Page({
     valuationTime: '', // 估值时间 gztime，如 "2026-05-09 14:32"
     valuationDate: '',  // 净值日期 jzrq，如 "2026-05-09"
     alertEnabled: false, // 涨跌提醒是否开启
-    alertRenewed: false  // 今日额度是否已续订
+    alertRenewed: false, // 今日额度是否已续订
+    boardReady: false    // 关联板块(慢)是否已补齐;阶段涨幅在第一段就绪
   } as {
     holdings: UnifiedHoldingDisplay[];
     totalCost: number;
@@ -76,6 +77,7 @@ Page({
     valuationDate: string;
     alertEnabled: boolean;
     alertRenewed: boolean;
+    boardReady: boolean;
   },
 
   autoRefreshTimer: null as number | null,
@@ -335,33 +337,27 @@ Page({
         ...importedResults
       ];
 
-      // 阶段涨幅(近1月/3月/1年) + 关联板块(主板块+加权涨跌)，附加到每条持仓
+      // 阶段涨幅(近1月/3月/1年,有缓存,快)——第一段就绪即附加;关联板块(慢)第二段再补
       const holdCodes = Array.from(new Set(allHoldings.map((h) => h.code).filter((c) => /^\d{6}$/.test(c))));
       const boardNameMap: Record<string, string> = {};
       allHoldings.forEach((h) => { if (h.name) boardNameMap[h.code] = h.name; });
-      const [periodArr, boards] = await Promise.all([
-        Promise.all(
-          holdCodes.map(async (c): Promise<[string, { m1: number; m3: number; y1: number }]> => {
-            try {
-              const p = await getFundPeriodIncrease(c);
-              const g = (l: string) => { const x = p.find((pp) => pp.label === l); return x ? x.syl : 0; };
-              return [c, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
-            } catch (e) {
-              return [c, { m1: 0, m3: 0, y1: 0 }];
-            }
-          })
-        ),
-        getFundBoards(holdCodes, boardNameMap).catch(() => new Map<string, { board: string; change: number | null }>())
-      ]);
+      const periodArr = await Promise.all(
+        holdCodes.map(async (c): Promise<[string, { m1: number; m3: number; y1: number }]> => {
+          try {
+            const p = await getFundPeriodIncrease(c);
+            const g = (l: string) => { const x = p.find((pp) => pp.label === l); return x ? x.syl : 0; };
+            return [c, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
+          } catch (e) {
+            return [c, { m1: 0, m3: 0, y1: 0 }];
+          }
+        })
+      );
       const periodMap = new Map(periodArr);
       allHoldings.forEach((h) => {
         const per = periodMap.get(h.code) || { m1: 0, m3: 0, y1: 0 };
         (h as any).m1 = per.m1;
         (h as any).m3 = per.m3;
         (h as any).y1 = per.y1;
-        const bd = (boards as Map<string, { board: string; change: number | null }>).get(h.code);
-        (h as any).board = bd ? bd.board : '';
-        (h as any).boardChange = bd ? bd.change : null;
       });
 
       // ===== 统一汇总 =====
@@ -453,7 +449,7 @@ Page({
         );
       }
 
-      this.setData({
+      const baseData = {
         holdings: allHoldings,
         totalCost: Number(totalCost) || 0,
         totalValue: Number(totalValue) || 0,
@@ -466,7 +462,22 @@ Page({
         valuationTime,
         valuationDate,
         loading: false
+      };
+
+      // ===== 第一段:估值+汇总+阶段涨幅就绪即出表(关联板块占位);仅首次加载,刷新不降级 =====
+      const firstLoad = this.data.holdings.length === 0;
+      if (firstLoad) this.setData({ ...baseData, boardReady: false });
+
+      // ===== 第二段:关联板块(慢:持仓→f127→行情)补齐后翻 boardReady =====
+      const boards = await getFundBoards(holdCodes, boardNameMap)
+        .catch(() => new Map<string, { board: string; change: number | null }>());
+      allHoldings.forEach((h) => {
+        const bd = boards.get(h.code);
+        (h as any).board = bd ? bd.board : '';
+        (h as any).boardChange = bd ? bd.change : null;
       });
+      if (seq !== this.loadSeq) return;
+      this.setData({ ...baseData, boardReady: true });
     } catch (e) {
       console.error('加载持仓失败:', e);
       wx.showToast({ title: '加载失败', icon: 'none' });
