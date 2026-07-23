@@ -78,11 +78,14 @@ module.exports = {
             <text class="cell-sub {{item.todayProfit >= 0 ? 'positive' : 'negative'}}" wx:if="{{item.holdingAmount > 0}}">{{item.todayProfit >= 0 ? '+' : ''}}{{utils.toFixed(item.todayProfit, 2)}}</text>
           </view>
           <view class="c c-bd">
-            <text class="cell-top {{item.boardChange == null ? 'muted' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
-            <text class="cell-sub">{{item.board || '-'}}</text>
+            <block wx:if="{{enriched}}">
+              <text class="cell-top {{item.boardChange == null ? 'muted' : (item.boardChange >= 0 ? 'positive' : 'negative')}}">{{item.boardChange == null ? '--' : (item.boardChange >= 0 ? '+' : '') + utils.toFixed(item.boardChange, 2) + '%'}}</text>
+              <text class="cell-sub">{{item.board || '-'}}</text>
+            </block>
+            <text wx:else class="cell-top muted">··</text>
           </view>
-          <view class="c c-m"><text class="cell-top {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</text></view>
-          <view class="c c-m"><text class="cell-top {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</text></view>
+          <view class="c c-m"><text wx:if="{{enriched}}" class="cell-top {{item.m1 >= 0 ? 'positive' : 'negative'}}">{{item.m1 >= 0 ? '+' : ''}}{{utils.toFixed(item.m1, 2)}}%</text><text wx:else class="cell-top muted">··</text></view>
+          <view class="c c-m"><text wx:if="{{enriched}}" class="cell-top {{item.y1 >= 0 ? 'positive' : 'negative'}}">{{item.y1 >= 0 ? '+' : ''}}{{utils.toFixed(item.y1, 2)}}%</text><text wx:else class="cell-top muted">··</text></view>
         </view>
       </view>
     </scroll-view>

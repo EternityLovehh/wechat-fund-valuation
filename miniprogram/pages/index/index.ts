@@ -18,6 +18,7 @@ Page({
   data: {
     funds: [] as FundDisplay[],
     loading: false,
+    enriched: false, // 阶段涨幅/关联板块是否已补齐(第二段渲染)
     refreshing: false, // 下拉刷新状态
     scrollLeft: 0,
     scrollTop: 0,
@@ -97,120 +98,108 @@ Page({
       const estimates = await getBatchFundEstimate(codes, { recordAccuracy: true });
       const estMap = new Map(estimates.map(e => [e.code, e]));
 
-      // 阶段涨幅(近1月/3月/1年)独立接口、带缓存，对已拿到估值的基金并发拉取（失败不影响主流程）
-      const periodEntries = await Promise.all(
-        Array.from(estMap.keys()).map(async (code): Promise<[string, { m1: number; m3: number; y1: number }]> => {
-          try {
-            const p = await getFundPeriodIncrease(code);
-            const g = (label: string) => { const x = p.find((pp) => pp.label === label); return x ? x.syl : 0; };
-            return [code, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
-          } catch (e) {
-            return [code, { m1: 0, m3: 0, y1: 0 }];
-          }
-        })
-      );
-      const periodMap = new Map(periodEntries);
+      // 组装函数：period/board 可后补(先渲染核心列，再补阶段涨幅/关联板块)
+      type Per = { m1: number; m3: number; y1: number };
+      const assemble = (
+        periodMap: Map<string, Per>,
+        boardMap: Map<string, { board: string; change: number | null }>
+      ): FundDisplay[] => {
+        const funds: FundDisplay[] = [];
+        for (const f of optionalFunds) {
+          const fundInfo = estMap.get(f.code);
+          if (!fundInfo) continue;
+          const per = periodMap.get(f.code);
 
-      // 关联板块(主板块 + 加权今日涨跌)；失败返回空 Map,不影响主流程
-      let boardMap = new Map<string, { board: string; change: number | null }>();
-      const nameMap: Record<string, string> = {};
-      estMap.forEach((v, k) => { nameMap[k] = v.name; });
-      try { boardMap = await getFundBoards(Array.from(estMap.keys()), nameMap); } catch (e) { /* 忽略 */ }
-
-      // 按自选顺序组装；无估值数据的（临时码/接口未返回）直接跳过
-      const funds: FundDisplay[] = [];
-      for (const f of optionalFunds) {
-        const fundInfo = estMap.get(f.code);
-        if (!fundInfo) continue;
-
-        const per = periodMap.get(f.code) || { m1: 0, m3: 0, y1: 0 };
-        const yearGrowth = per.y1;
-
-        // 关联持仓信息
-        let holdingAmount = 0;
-        let holdingProfit = 0;
-        let todayProfit = 0;
-
-        // 1. 检查手动持仓
-        const manual = manualHoldings.find(h => h.code === f.code);
-        if (manual) {
-          const shares = manual.shares || 0;
-          const cost = manual.cost || 0;
-          const netValue = fundInfo.netValue || fundInfo.estimatedValue;
-          holdingAmount = shares * netValue;
-          holdingProfit = shares * netValue - shares * cost;
-          todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
-        }
-
-        // 2. 检查导入持仓 (累加，虽然通常代码唯一)
-        const imported = importedHoldings.find(h => h.code === f.code);
-        if (imported) {
-          const shares = imported.shares || 0;
-          const cost = imported.cost || 0;
-          const netValue = fundInfo.netValue || fundInfo.estimatedValue;
-
-          if (shares > 0) {
+          let holdingAmount = 0, holdingProfit = 0, todayProfit = 0;
+          const manual = manualHoldings.find(h => h.code === f.code);
+          if (manual) {
+            const shares = manual.shares || 0;
+            const cost = manual.cost || 0;
+            const netValue = fundInfo.netValue || fundInfo.estimatedValue;
             holdingAmount = shares * netValue;
-            holdingProfit = cost > 0 ? (shares * netValue - shares * cost) : (imported.profit || 0);
+            holdingProfit = shares * netValue - shares * cost;
             todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
-          } else {
-            // 兜底使用快照
-            holdingAmount = imported.amount || 0;
-            holdingProfit = imported.profit || 0;
           }
+          const imported = importedHoldings.find(h => h.code === f.code);
+          if (imported) {
+            const shares = imported.shares || 0;
+            const cost = imported.cost || 0;
+            const netValue = fundInfo.netValue || fundInfo.estimatedValue;
+            if (shares > 0) {
+              holdingAmount = shares * netValue;
+              holdingProfit = cost > 0 ? (shares * netValue - shares * cost) : (imported.profit || 0);
+              todayProfit = shares * (fundInfo.estimatedValue - fundInfo.netValue);
+            } else {
+              holdingAmount = imported.amount || 0;
+              holdingProfit = imported.profit || 0;
+            }
+          }
+
+          const bd = boardMap.get(f.code);
+          funds.push({
+            ...fundInfo,
+            yearGrowth: per ? per.y1 : undefined,
+            m1: per ? per.m1 : undefined,
+            m3: per ? per.m3 : undefined,
+            y1: per ? per.y1 : undefined,
+            board: bd ? bd.board : '',
+            boardChange: bd ? bd.change : null,
+            holdingAmount,
+            holdingProfit,
+            todayProfit
+          } as FundDisplay);
         }
+        return funds;
+      };
 
-        const bd = boardMap.get(f.code);
-        funds.push({
-          ...fundInfo,
-          yearGrowth,
-          m1: per.m1,
-          m3: per.m3,
-          y1: per.y1,
-          board: bd ? bd.board : '',
-          boardChange: bd ? bd.change : null,
-          holdingAmount,
-          holdingProfit,
-          todayProfit
-        } as FundDisplay);
-      }
-
-      console.log('成功加载基金数量:', funds.length, '/', optionalFunds.length);
-
-      // 数据时效/市场状态
+      // 数据时效/市场状态(估值已含 updateTime/valuationDate)
       const status = getMarketStatus();
       const STATUS_LABELS: Record<MarketStatus, string> = {
-        'trading': '交易中',
-        'lunch': '午间休市',
-        'pre-open': '盘前',
-        'post-close': '盘后',
-        'holiday': '休市',
-        'weekend': '休市'
+        'trading': '交易中', 'lunch': '午间休市', 'pre-open': '盘前',
+        'post-close': '盘后', 'holiday': '休市', 'weekend': '休市'
       };
-      let latestUpdateTime = '';
-      let latestValuationDate = '';
-      for (const f of funds) {
+      let latestUpdateTime = '', latestValuationDate = '';
+      estMap.forEach((f) => {
         if (f.updateTime && f.updateTime > latestUpdateTime) latestUpdateTime = f.updateTime;
         if (f.valuationDate && f.valuationDate > latestValuationDate) latestValuationDate = f.valuationDate;
-      }
+      });
 
-      // 已有更新的一次加载在跑：丢弃本次（较旧）结果，避免覆盖闪烁
-      if (seq !== this.loadSeq) return;
-
-      this.setData({
-        funds,
+      const statusFields = {
         marketStatus: status,
         statusLabel: STATUS_LABELS[status],
         valuationTime: latestUpdateTime ? latestUpdateTime.slice(-5) : '',
-        valuationDate: latestValuationDate ? latestValuationDate.slice(5) : '',
-        loading: false
-      });
-      
-      // 如果有未取到估值的，记录数量
-      const failedCount = codes.length - funds.length;
-      if (failedCount > 0) {
-        console.log('未取到估值数量:', failedCount);
+        valuationDate: latestValuationDate ? latestValuationDate.slice(5) : ''
+      };
+
+      // ===== 第一段(仅首次加载):估值就绪即渲染核心列 + 关骨架屏;周期/板块占位 =====
+      // 30s 自动刷新时已有数据,跳过本段,避免占位符 `··` 每次闪一下。
+      const firstLoad = this.data.funds.length === 0;
+      if (firstLoad) {
+        if (seq !== this.loadSeq) return;
+        this.setData({ funds: assemble(new Map(), new Map()), enriched: false, loading: false, ...statusFields });
       }
+
+      // ===== 第二段:阶段涨幅 + 关联板块(较慢),后台并发拉取后补齐 =====
+      const nameMap: Record<string, string> = {};
+      estMap.forEach((v, k) => { nameMap[k] = v.name; });
+      const [periodEntries, boardMap] = await Promise.all([
+        Promise.all(
+          Array.from(estMap.keys()).map(async (code): Promise<[string, Per]> => {
+            try {
+              const p = await getFundPeriodIncrease(code);
+              const g = (label: string) => { const x = p.find((pp) => pp.label === label); return x ? x.syl : 0; };
+              return [code, { m1: g('近1月'), m3: g('近3月'), y1: g('近1年') }];
+            } catch (e) {
+              return [code, { m1: 0, m3: 0, y1: 0 }];
+            }
+          })
+        ),
+        getFundBoards(Array.from(estMap.keys()), nameMap).catch(() => new Map<string, { board: string; change: number | null }>())
+      ]);
+      const periodMap = new Map<string, Per>(periodEntries);
+
+      if (seq !== this.loadSeq) return;
+      this.setData({ funds: assemble(periodMap, boardMap), enriched: true, loading: false, ...statusFields });
     } catch (e) {
       console.error('加载自选失败:', e);
       wx.showToast({ title: '加载失败', icon: 'none' });
