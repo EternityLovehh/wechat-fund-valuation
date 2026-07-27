@@ -5,6 +5,7 @@ import { normalizeHolding, settlePendingAdds, computeImportedDisplay } from '../
 import { getTodayStr } from '../../utils/appDate'
 import { recordPortfolioSnapshot } from '../../utils/history'
 import { getAlertSettings, isRenewedToday, renewQuota } from '../../utils/alert'
+import { syncHoldingsToCloud } from '../../utils/reportSync'
 
 // 阶段涨幅 + 关联板块(两类持仓共用)
 interface ExtraCols {
@@ -93,6 +94,7 @@ Page({
     // 每次进入都重新加载：持仓金额/加仓待确认等会在不改变基金代码集合的情况下变化
     // （如加仓、重新导入同一批基金），只比代码集合会漏掉这些更新，导致显示旧金额。
     this.loadHoldings();
+    syncHoldingsToCloud(); // 静默:持仓快照上云,hash 无变化不实际调用
     this.startAutoRefresh();
   },
 
