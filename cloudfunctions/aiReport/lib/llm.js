@@ -12,7 +12,9 @@ async function generateReport(system, user) {
   const call = () =>
     model.generateText({
       model: MODEL_ID,
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.5,
+      max_tokens: 3000
     });
   try {
     return (await call()).text;

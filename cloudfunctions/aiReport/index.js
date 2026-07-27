@@ -42,13 +42,17 @@ async function generateForUser(openid, holdings, trigger, dryRun) {
     content = '';
     status = 'failed';
   }
+  const col = db.collection('fund_reports');
+  const existed = await col.where({ openid, date: facts.date }).get();
+  // 失败不得覆盖同日已成功报告:同日已有 ok 文档时,本次失败直接放弃写库
+  if (status === 'failed' && existed.data.length && existed.data[0].status === 'ok') {
+    return { openid: openid.slice(0, 8) + '…', status: 'failed-kept-old', date: facts.date };
+  }
   const doc = {
     openid, date: facts.date, content, facts,
     summary: status === 'ok' ? extractSummary(content) : '生成失败',
     status, trigger, createdAt: Date.now()
   };
-  const col = db.collection('fund_reports');
-  const existed = await col.where({ openid, date: facts.date }).get();
   if (existed.data.length) await col.doc(existed.data[0]._id).update({ data: doc });
   else await col.add({ data: doc });
 

@@ -1,5 +1,6 @@
 // 持仓快照上云(供 aiReport 定时生成读取):合并手动持仓与截图导入(已确认部分),
 // 内容 hash 无变化不重复调用云函数。key 带环境后缀,与 storage.ts 隔离策略一致。
+// 清仓(持仓变为空列表)也需要同步:调云函数 clear:true 清空云端快照,hash 记为固定串 'EMPTY'。
 import { getHoldingFunds, getImportedHoldings } from './storage'
 
 export interface UnifiedHolding { code: string; name: string; shares: number; cost: number }
@@ -40,13 +41,16 @@ function hashOf(list: UnifiedHolding[]): string {
 }
 
 // 静默同步(可在 onShow/loadHoldings 后调):失败忽略,下次自然重试
+// 空列表(清仓)也需上云清空快照,否则 timer 侧会用陈旧持仓继续生成报告。
 export async function syncHoldingsToCloud(): Promise<void> {
   const holdings = collectUnifiedHoldings();
-  if (!holdings.length) return;
-  const hash = hashOf(holdings);
+  const hash = holdings.length ? hashOf(holdings) : 'EMPTY';
   try { if (wx.getStorageSync(HASH_KEY) === hash) return; } catch (e) { /* ignore */ }
   try {
-    const r: any = await wx.cloud.callFunction({ name: 'syncHoldings', data: { holdings } });
+    const r: any = await wx.cloud.callFunction({
+      name: 'syncHoldings',
+      data: holdings.length ? { holdings } : { clear: true }
+    });
     if (r && r.result && r.result.success) wx.setStorageSync(HASH_KEY, hash);
   } catch (e) { /* ignore:静默失败 */ }
 }

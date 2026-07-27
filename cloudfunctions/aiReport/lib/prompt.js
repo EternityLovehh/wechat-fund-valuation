@@ -37,12 +37,12 @@ function buildPrompt(facts) {
 }
 function fmt(n) { return n == null ? '--' : (n >= 0 ? '+' : '') + n; }
 
-// 列表页摘要:跳过标题/空行/引用,取首个正文段落截 60 字
+// 列表页摘要:跳过标题/空行/引用,取首个正文段落截 60 字,清洗行内 markdown(**加粗**/`代码`)
 function extractSummary(md) {
   for (const raw of String(md || '').split('\n')) {
     const line = raw.trim();
     if (!line || line.startsWith('#') || line.startsWith('>')) continue;
-    return line.slice(0, 60);
+    return line.slice(0, 60).replace(/\*\*|`/g, '');
   }
   return '';
 }

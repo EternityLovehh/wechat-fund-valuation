@@ -29,8 +29,17 @@ Page({
     try {
       const r: any = await wx.cloud.callFunction({ name: 'aiReport', data: { action: 'get', id } });
       const report = r.result && r.result.report;
-      if (report) this.setData({ detail: report, nodes: parseMarkdown(report.content) });
-      else wx.showToast({ title: '报告不存在', icon: 'none' });
+      if (!report) {
+        wx.showToast({ title: '报告不存在', icon: 'none' });
+      } else if (report.status !== 'ok' || !report.content) {
+        // 失败报告无正文,拦截进入详情,避免渲染空白/无意义内容
+        wx.showToast({ title: '该报告生成失败，请重新生成', icon: 'none' });
+      } else {
+        const nodes = parseMarkdown(report.content).map((n, i) => ({
+          ...n, idx: i, spans: n.spans.map((sp, j) => ({ ...sp, idx: j }))
+        }));
+        this.setData({ detail: report, nodes });
+      }
     } catch (e) {
       wx.showToast({ title: '加载失败', icon: 'none' });
     }
@@ -55,6 +64,9 @@ Page({
     } catch (e) {
       wx.hideLoading();
       wx.showToast({ title: '生成超时或失败', icon: 'none' });
+      // 端侧超时不代表服务端失败:云函数常在后台跑完并已落库成功,
+      // 延时刷新列表以捞取可能已生成好的报告,避免用户误以为完全失败。
+      setTimeout(() => { this.loadList(); }, 3000);
     }
     this.setData({ generating: false });
   },

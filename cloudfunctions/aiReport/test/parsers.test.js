@@ -36,3 +36,11 @@ test('parseUlist', () => {
   const m = p.parseUlist({ data: { diff: [{ f12: '600519', f3: 2.11 }] } });
   assert.equal(m.get('600519'), 2.11);
 });
+test('parseGZDate 取估值日期(仅日期部分)', () => {
+  assert.equal(p.parseGZDate({ Data: { gzrq: '2026-07-24' } }), '2026-07-24');
+  assert.equal(p.parseGZDate({ Data: { gzrq: '2026-07-24 15:00:00' } }), '2026-07-24');
+});
+test('parseGZDate 缺失时返回 null', () => {
+  assert.equal(p.parseGZDate({ Data: {} }), null);
+  assert.equal(p.parseGZDate({}), null);
+});

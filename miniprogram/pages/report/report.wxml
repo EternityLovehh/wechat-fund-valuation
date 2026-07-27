@@ -21,8 +21,8 @@
   <block wx:else>
     <view class="detail-head"><text class="back" bindtap="closeDetail">‹ 返回列表</text><text class="detail-date">{{detail.date}}</text></view>
     <view class="md">
-      <view wx:for="{{nodes}}" wx:key="index" class="md-{{item.type}}">
-        <text wx:for="{{item.spans}}" wx:for-item="sp" wx:key="index" class="{{sp.bold ? 'b' : ''}}">{{sp.text}}</text>
+      <view wx:for="{{nodes}}" wx:key="idx" class="md-{{item.type}}">
+        <text wx:for="{{item.spans}}" wx:for-item="sp" wx:key="idx" class="{{sp.bold ? 'b' : ''}}">{{sp.text}}</text>
       </view>
     </view>
   </block>

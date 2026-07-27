@@ -26,3 +26,7 @@ test('extractSummary 跳过标题取首段截60字', () => {
   assert.ok(s.startsWith('今日组合上涨1%'));
   assert.ok(s.length <= 60);
 });
+test('extractSummary 清洗行内 markdown(加粗/行内代码)', () => {
+  const s = extractSummary('## 头\n**今日**上涨`1%`');
+  assert.ok(s.startsWith('今日上涨1%'));
+});

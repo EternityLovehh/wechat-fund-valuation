@@ -25,6 +25,11 @@ function parseGZList(json) {
   }
   return map;
 }
+// 估值口径日期(Data.gzrq):仅取日期部分,供 fetchAllData 校验估值是否为当日估值(防周末/节假日拿旧估值冒充当日)
+function parseGZDate(json) {
+  const raw = asJson(json)?.Data?.gzrq;
+  return raw ? String(raw).slice(0, 10) : null;
+}
 function parseNavList(json) {
   const map = Object.create(null);
   for (const d of asJson(json)?.Datas || []) {
@@ -83,13 +88,19 @@ async function safe(fn, fallback) { try { return await fn(); } catch (e) { retur
 // 拉全量数据:估值表/净值/每基金(阶段涨幅+行业+重仓)/重仓个股涨跌/大盘指数
 async function fetchAllData(codes) {
   const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-  const [gzMap, navMap] = await Promise.all([
-    safe(async () => parseGZList(await httpGet(
-      'https://api.fund.eastmoney.com/FundGuZhi/GetFundGZList?type=1&sort=3&orderType=desc&canbuy=0&pageIndex=1&pageSize=30000',
-      { Referer: 'https://fund.eastmoney.com/' })), {}),
+  const [gzResult, navMap] = await Promise.all([
+    safe(async () => {
+      const json = await httpGet(
+        'https://api.fund.eastmoney.com/FundGuZhi/GetFundGZList?type=1&sort=3&orderType=desc&canbuy=0&pageIndex=1&pageSize=30000',
+        { Referer: 'https://fund.eastmoney.com/' });
+      return { map: parseGZList(json), date: parseGZDate(json) };
+    }, { map: {}, date: null }),
     safe(async () => parseNavList(await httpGet(
       `${MOB}/FundMNFInfo?pageIndex=1&pageSize=${codes.length}&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=cf&Fcodes=${codes.join(',')}`)), {})
   ]);
+  const gzMap = gzResult.map;
+  // 估值日期非当日(周末/节假日接口仍返回上个交易日估值)时,不把估值当作当日涨跌,交由 facts.js 落入 navMissing
+  const gzIsToday = gzResult.date === today;
 
   const fundData = {};
   await Promise.all(codes.map(async (code) => {
@@ -102,7 +113,7 @@ async function fetchAllData(codes) {
     const gz = gzMap[code] || {};
     fundData[code] = {
       name: nav.name || gz.name || '', nav: nav.nav, navDate: nav.navDate,
-      navChg: nav.navChg, estChg: gz.gszzl, periods, sectors, topStocks
+      navChg: nav.navChg, estChg: gzIsToday ? gz.gszzl : null, periods, sectors, topStocks
     };
   }));
 
@@ -131,4 +142,4 @@ async function fetchAllData(codes) {
   return { fundData, indexes, today };
 }
 
-module.exports = { parseGZList, parseNavList, parsePeriods, parseSectors, parseTopStocks, parseUlist, fetchAllData, httpGet };
+module.exports = { parseGZList, parseGZDate, parseNavList, parsePeriods, parseSectors, parseTopStocks, parseUlist, fetchAllData, httpGet };
