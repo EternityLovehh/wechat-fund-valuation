@@ -29,10 +29,11 @@ function parseNavList(json) {
   const map = Object.create(null);
   for (const d of asJson(json)?.Datas || []) {
     if (!d || !d.FCODE) continue;
+    const v = parseFloat(d.NAVCHGRT);
     map[d.FCODE] = {
       nav: parseFloat(d.DWJZ) || 0,
       navDate: d.PDATE && d.PDATE !== '--' ? d.PDATE : '',
-      navChg: parseFloat(d.NAVCHGRT),
+      navChg: isNaN(v) ? null : v,
       name: d.SHORTNAME || ''
     };
   }

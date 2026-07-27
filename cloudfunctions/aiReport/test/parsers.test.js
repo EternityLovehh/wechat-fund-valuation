@@ -11,6 +11,11 @@ test('parseNavList', () => {
   const m = p.parseNavList({ Datas: [{ FCODE: '000001', DWJZ: '1.5000', PDATE: '2026-07-24', NAVCHGRT: '0.85', SHORTNAME: 'A基金' }] });
   assert.deepEqual(m['000001'], { nav: 1.5, navDate: '2026-07-24', navChg: 0.85, name: 'A基金' });
 });
+test('parseNavList NAVCHGRT缺数据(--)时 navChg 为 null', () => {
+  const m = p.parseNavList({ Datas: [{ FCODE: '000009', DWJZ: '1.2', PDATE: '--', NAVCHGRT: '--', SHORTNAME: 'X基金' }] });
+  assert.equal(m['000009'].navChg, null);
+  assert.equal(m['000009'].navDate, '');
+});
 test('parsePeriods 只保留近1月/近3月/近1年', () => {
   const out = p.parsePeriods({ Datas: [
     { title: 'Y', syl: '5.1' }, { title: '3Y', syl: '12.0' }, { title: '6Y', syl: '9' }, { title: '1N', syl: '30.5' }
