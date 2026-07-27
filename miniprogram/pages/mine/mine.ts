@@ -74,6 +74,9 @@ Page({
   goPenetration() {
     wx.navigateTo({ url: '/pages/penetration/penetration' });
   },
+  goReport() {
+    wx.navigateTo({ url: '/pages/report/report' });
+  },
   goCompare() {
     wx.navigateTo({ url: '/pages/compare/compare' });
   },

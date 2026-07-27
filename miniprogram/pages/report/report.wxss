@@ -1,0 +1,25 @@
+/* miniprogram/pages/report/report.wxss */
+.page { padding: 24rpx; }
+.toolbar { display: flex; gap: 16rpx; margin-bottom: 24rpx; }
+.btn { flex: 1; font-size: 28rpx; border-radius: 12rpx; background: #f2f3f5; }
+.btn.primary { background: #1989fa; color: #fff; }
+.empty { text-align: center; color: #999; padding: 120rpx 0; font-size: 28rpx; }
+.card { background: #fff; border-radius: 16rpx; padding: 24rpx; margin-bottom: 20rpx; box-shadow: 0 2rpx 8rpx rgba(0,0,0,.04); }
+.card-head { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
+.card-date { font-weight: 600; font-size: 30rpx; }
+.tag { font-size: 22rpx; padding: 2rpx 12rpx; border-radius: 8rpx; }
+.tag-timer { background: #e8f3ff; color: #1989fa; }
+.tag-manual { background: #e8f7ee; color: #07c160; }
+.tag-fail { background: #ffece8; color: #ee0a24; }
+.card-summary { color: #666; font-size: 26rpx; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
+.back { color: #1989fa; font-size: 28rpx; }
+.detail-date { font-weight: 600; }
+.md { background: #fff; border-radius: 16rpx; padding: 28rpx; }
+.md-h2 { font-size: 32rpx; font-weight: 700; margin: 28rpx 0 12rpx; }
+.md-h3 { font-size: 29rpx; font-weight: 600; margin: 20rpx 0 8rpx; }
+.md-p { font-size: 27rpx; line-height: 1.7; color: #333; margin-bottom: 12rpx; }
+.md-li { font-size: 27rpx; line-height: 1.7; color: #333; padding-left: 24rpx; position: relative; margin-bottom: 8rpx; }
+.md-li::before { content: '•'; position: absolute; left: 4rpx; color: #1989fa; }
+.md-quote { font-size: 24rpx; color: #999; border-left: 6rpx solid #eee; padding-left: 16rpx; margin-top: 24rpx; }
+.b { font-weight: 700; }

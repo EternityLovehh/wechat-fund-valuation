@@ -1,0 +1,29 @@
+<!-- miniprogram/pages/report/report.wxml -->
+<view class="page">
+  <!-- 列表态 -->
+  <block wx:if="{{!detail}}">
+    <view class="toolbar">
+      <button class="btn primary" bindtap="onGenerate" loading="{{generating}}" disabled="{{generating}}">立即生成今日复盘</button>
+      <button class="btn" bindtap="onSubscribe">订阅每日推送</button>
+    </view>
+    <view wx:if="{{!list.length && !loading}}" class="empty">还没有报告，点上方按钮生成第一份</view>
+    <view class="card" wx:for="{{list}}" wx:key="_id" bindtap="openDetail" data-id="{{item._id}}">
+      <view class="card-head">
+        <text class="card-date">{{item.date}}</text>
+        <text class="tag {{item.status === 'ok' ? (item.trigger === 'timer' ? 'tag-timer' : 'tag-manual') : 'tag-fail'}}">
+          {{item.status === 'ok' ? (item.trigger === 'timer' ? '自动' : '手动') : '失败'}}
+        </text>
+      </view>
+      <text class="card-summary">{{item.summary}}</text>
+    </view>
+  </block>
+  <!-- 详情态 -->
+  <block wx:else>
+    <view class="detail-head"><text class="back" bindtap="closeDetail">‹ 返回列表</text><text class="detail-date">{{detail.date}}</text></view>
+    <view class="md">
+      <view wx:for="{{nodes}}" wx:key="index" class="md-{{item.type}}">
+        <text wx:for="{{item.spans}}" wx:for-item="sp" wx:key="index" class="{{sp.bold ? 'b' : ''}}">{{sp.text}}</text>
+      </view>
+    </view>
+  </block>
+</view>

@@ -113,3 +113,12 @@ export async function syncCodesSilently(): Promise<void> {
   if (!s.enabled) return;
   await pushToCloud(s, false);
 }
+
+// 报告页「订阅每日推送」:请求一次授权并给云端额度+1。
+// 与涨跌提醒共用模板与 quota 池;不改动 enabled/阈值(沿用当前本地设置原样上传)。
+export async function grantReportQuota(): Promise<boolean> {
+  const accepted = await requestSubscribe();
+  await pushToCloud(getAlertSettings(), accepted);
+  if (accepted) wx.setStorageSync(RENEW_KEY, beijingToday());
+  return accepted;
+}

@@ -12,7 +12,8 @@
     "pages/rank/rank",
     "pages/calc/calc",
     "pages/news/news",
-    "pages/alert/alert"
+    "pages/alert/alert",
+    "pages/report/report"
   ],
   "window": {
     "navigationBarTextStyle": "white",

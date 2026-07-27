@@ -24,6 +24,11 @@
       <view class="cell-main"><text class="cell-label">持仓穿透</text><text class="cell-desc">重仓/板块合并暴露 · 持仓诊断</text></view>
       <text class="cell-arrow">›</text>
     </view>
+    <view class="cell" bindtap="goReport" hover-class="cell-hover">
+      <text class="cell-icon">🤖</text>
+      <view class="cell-main"><text class="cell-label">AI 复盘</text><text class="cell-desc">每日持仓复盘 · 归因 · 走势解读</text></view>
+      <text class="cell-arrow">›</text>
+    </view>
   </view>
 
   <view class="group">
