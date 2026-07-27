@@ -4,5 +4,6 @@
   ],
   "permissions": {
     "openapi": ["subscribeMessage.send"]
-  }
+  },
+  "timeout": 60
 }

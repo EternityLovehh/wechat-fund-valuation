@@ -1,6 +1,7 @@
 // 云函数:AI 持仓复盘报告。
 // 触发:timer 每天 21:00(函数内跳过周末) / 小程序手动调用(可带最新持仓) / action list|get 供报告页读取。
 // 流程:持仓 → fetchAllData → computeFacts → buildPrompt → LLM → fund_reports(同 openid+date 覆盖,留 30 份) → 订阅消息(仅 timer)。
+// timer 分支按用户并行执行且逐用户 try/catch 隔离:体验版用户量小(2~3 人),并行既避免单用户异常中断整批,又把批次墙钟压到接近单用户耗时,不必额外限并发。
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
@@ -116,21 +117,25 @@ exports.main = async (event = {}) => {
     if (!holdings) return { success: false, error: '请先在持仓页添加持仓' };
     const result = await generateForUser(OPENID, holdings, 'manual', !!event.dryRun);
     if (event.dryRun) return { success: true, dryRun: result };
-    return { success: result.status === 'ok', result };
+    if (result.skip) return { success: false, error: '行情数据获取失败,请稍后重试' };
+    return { success: result.status === 'ok', result, error: result.status === 'ok' ? undefined : '报告生成失败,请稍后重试' };
   }
 
-  // 定时模式:遍历全部用户
+  // 定时模式:遍历全部用户,按用户并行且隔离错误(见文件头注释)
   const bjDay = new Date(Date.now() + 8 * 3600 * 1000).getUTCDay();
   if (bjDay === 0 || bjDay === 6) return { skipped: 'weekend' };
   const users = await db.collection('user_holdings').get();
   const state = (event && event.state) || 'trial';
-  const debug = [];
-  for (const u of users.data) {
-    const holdings = sanitizeHoldings(u.holdings);
-    if (!holdings) { debug.push({ openid: String(u._id).slice(0, 8) + '…', skip: 'no-holdings' }); continue; }
-    const result = await generateForUser(u._id, holdings, 'timer', false);
-    result.push = result.status ? await pushReport(u._id, result, state) : 'skipped';
-    debug.push(result);
-  }
+  const debug = await Promise.all(users.data.map(async (u) => {
+    try {
+      const holdings = sanitizeHoldings(u.holdings);
+      if (!holdings) return { openid: String(u._id).slice(0, 8) + '…', skip: 'no-holdings' };
+      const result = await generateForUser(u._id, holdings, 'timer', false);
+      result.push = result.status ? await pushReport(u._id, result, state) : 'skipped';
+      return result;
+    } catch (e) {
+      return { openid: String(u._id).slice(0, 8) + '…', skip: 'error', message: (e && e.message) || String(e) };
+    }
+  }));
   return { users: users.data.length, state, debug };
 };
