@@ -28,19 +28,36 @@ function sanitizeHoldings(input) {
 }
 
 async function generateForUser(openid, holdings, trigger, dryRun) {
+  const tag = `[aiReport ${openid.slice(0, 6)}…]`;
+  const t0 = Date.now();
   const codes = holdings.map((h) => h.code);
+  console.log(`${tag} start trigger=${trigger} codes=${codes.length}[${codes.join(',')}]`);
+
+  const tFetch = Date.now();
   const { fundData, indexes, today } = await fetchAllData(codes);
+  const navOk = Object.values(fundData).filter((d) => Number(d.nav) > 0).length;
+  console.log(`${tag} fetchAllData ${Date.now() - tFetch}ms today=${today} funds=${Object.keys(fundData).length} navOk=${navOk} indexes=${indexes.length}`);
+
   const facts = computeFacts(holdings, fundData, indexes, today);
-  if (!facts) return { openid: openid.slice(0, 8) + '…', skip: 'no-usable-data' };
+  if (!facts) {
+    console.warn(`${tag} SKIP no-usable-data (每只基金 nav<=0? navOk=${navOk})`);
+    return { openid: openid.slice(0, 8) + '…', skip: 'no-usable-data' };
+  }
   const prompt = buildPrompt(facts);
+  console.log(`${tag} facts.funds=${facts.funds.length} promptLen sys=${prompt.system.length} user=${prompt.user.length}`);
   if (dryRun) return { facts, prompt };
 
-  let content, status = 'ok';
+  let content, status = 'ok', errMsg = '';
+  const tLLM = Date.now();
   try {
     content = await generateReport(prompt.system, prompt.user);
+    console.log(`${tag} LLM ok ${Date.now() - tLLM}ms contentLen=${(content || '').length}`);
   } catch (e) {
     content = '';
     status = 'failed';
+    // 保留真实错误(模型ID失效/超时/配额等),供诊断;不吞
+    errMsg = (e && (e.message || e.errMsg || e.code)) ? String(e.message || e.errMsg || e.code) : String(e);
+    console.error(`${tag} LLM FAIL ${Date.now() - tLLM}ms err=${errMsg} totalElapsed=${Date.now() - t0}ms`, e && e.stack ? e.stack : e);
   }
   const col = db.collection('fund_reports');
   const existed = await col.where({ openid, date: facts.date }).get();
@@ -62,7 +79,7 @@ async function generateForUser(openid, holdings, trigger, dryRun) {
     const old = await col.where({ openid }).orderBy('createdAt', 'asc').limit(total - KEEP_REPORTS).get();
     for (const d of old.data) await col.doc(d._id).remove();
   }
-  return { openid: openid.slice(0, 8) + '…', status, date: facts.date, dayProfit: facts.portfolio.dayProfit, summary: doc.summary };
+  return { openid: openid.slice(0, 8) + '…', status, date: facts.date, dayProfit: facts.portfolio.dayProfit, summary: doc.summary, errMsg };
 }
 
 // 仅 timer:发订阅消息(与涨跌提醒共池 quota;lastReportDate 独立去重)
@@ -119,18 +136,27 @@ exports.main = async (event = {}) => {
       holdings = snap && snap.data && sanitizeHoldings(snap.data.holdings);
     }
     if (!holdings) return { success: false, error: '请先在持仓页添加持仓' };
-    const result = await generateForUser(OPENID, holdings, 'manual', !!event.dryRun);
-    if (event.dryRun) return { success: true, dryRun: result };
-    if (result.skip) return { success: false, error: '行情数据获取失败,请稍后重试' };
-    return { success: result.status === 'ok', result, error: result.status === 'ok' ? undefined : '报告生成失败,请稍后重试' };
+    try {
+      const result = await generateForUser(OPENID, holdings, 'manual', !!event.dryRun);
+      if (event.dryRun) return { success: true, dryRun: result };
+      if (result.skip) return { success: false, error: '行情数据获取失败,请稍后重试', diag: result.skip };
+      return { success: result.status === 'ok', result, error: result.status === 'ok' ? undefined : `报告生成失败：${result.errMsg || '请稍后重试'}` };
+    } catch (e) {
+      // 取数/落库等阶段抛错也要带回原因(而非让 callFunction 抛→客户端只显示"超时")
+      const msg = (e && (e.message || e.errMsg)) ? String(e.message || e.errMsg) : String(e);
+      console.error('[aiReport] manual 未捕获异常:', msg, e && e.stack ? e.stack : e);
+      return { success: false, error: `生成失败：${msg}` };
+    }
   }
 
-  // 定时模式:遍历全部用户,按用户并行且隔离错误(见文件头注释)
+  // 定时模式:遍历全部用户,隔离错误(见文件头注释)。
+  // CloudBase AI 环境级并发上限默认 10,21:00 定时若把全部用户一次性 Promise.all 会撞 429,
+  // 故按 LLM_CONCURRENCY 分批(留余量给取数并发),批内并行、批间串行。
   const bjDay = new Date(Date.now() + 8 * 3600 * 1000).getUTCDay();
   if (bjDay === 0 || bjDay === 6) return { skipped: 'weekend' };
   const users = await db.collection('user_holdings').get();
   const state = (event && event.state) || 'trial';
-  const debug = await Promise.all(users.data.map(async (u) => {
+  const runUser = async (u) => {
     try {
       const holdings = sanitizeHoldings(u.holdings);
       if (!holdings) return { openid: String(u._id).slice(0, 8) + '…', skip: 'no-holdings' };
@@ -140,6 +166,12 @@ exports.main = async (event = {}) => {
     } catch (e) {
       return { openid: String(u._id).slice(0, 8) + '…', skip: 'error', message: (e && e.message) || String(e) };
     }
-  }));
+  };
+  const LLM_CONCURRENCY = 4;
+  const debug = [];
+  for (let i = 0; i < users.data.length; i += LLM_CONCURRENCY) {
+    const batch = users.data.slice(i, i + LLM_CONCURRENCY);
+    debug.push(...(await Promise.all(batch.map(runUser))));
+  }
   return { users: users.data.length, state, debug };
 };

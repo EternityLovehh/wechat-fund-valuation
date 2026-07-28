@@ -342,10 +342,10 @@ page {
 .est-tag-nav { color: #999; border-color: #ddd; background: #f5f5f5; }
 
 /* ===== 横向滚动多列表(养基宝式:首列粘性 + 大字/高行/两行单元格) =====
-   列顺序: 名称(1) 估值(2) 今日(3) 关联板块(4) 近1月(5) 近1年(6) 持有金额(7)
-   列宽合计 = 260+150+140+160+120+120+160 = 1110rpx (须与 .tbl 一致,否则表头/数据错位) */
+   列顺序: 名称(1) 估值(2) 今日(3) 关联板块(4) 近1月(5) 近1年(6)
+   列宽合计 = 260+160+170+200+160+160 = 1110rpx (须与 .tbl 一致,否则表头/数据错位) */
 .tbl-scroll { width: 100%; background: #fff; }
-.tbl { width: 1030rpx; }
+.tbl { width: 1110rpx; }
 .trow {
   display: flex; align-items: stretch;
   border-bottom: 1rpx solid #eef0f3; background: #fff;
@@ -360,9 +360,9 @@ page {
 }
 .thead .c { color: #999; font-size: 24rpx; font-weight: 400; padding: 20rpx 12rpx; }
 /* 逐列宽度用显式 class(不用 nth-child:微信会把 WXML 注释算进 nth-child 导致错位) */
-.c-est { width: 150rpx; }  /* 估值 */
-.c-day { width: 140rpx; }  /* 今日 */
-.c-bd  { width: 160rpx; }  /* 关联板块 */
+.c-est { width: 160rpx; }  /* 估值 */
+.c-day { width: 170rpx; }  /* 今日(涨幅% + 今日盈亏额) */
+.c-bd  { width: 200rpx; }  /* 关联板块(板块名可较长,如"国证半导体芯片") */
 .c-m   { width: 160rpx; }  /* 近1月/近1年(容纳 +123.45% 等8字符+列间距) */
 .c-amt { width: 160rpx; }  /* 持有金额 */
 
@@ -380,9 +380,9 @@ page {
 }
 .fund-sub { font-size: 21rpx; color: #bbb; margin-top: 6rpx; display: flex; align-items: center; gap: 10rpx; }
 
-/* 单元格:数字(上) + 小标签(下) */
-.cell-top { font-size: 28rpx; font-weight: 500; line-height: 1.25; }
-.cell-sub { font-size: 21rpx; margin-top: 6rpx; color: #999; }
+/* 单元格:数字(上) + 小标签(下)。子标签(如板块名)超列宽则省略,避免溢出盖住相邻列 */
+.cell-top { font-size: 28rpx; font-weight: 500; line-height: 1.25; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.cell-sub { font-size: 21rpx; margin-top: 6rpx; color: #999; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .cell-top.dark { color: #444; }
 .cell-top.muted { color: #bbb; font-weight: 400; }
 .holding-tag { font-size: 18rpx; color: #2196f3; background: #e3f2fd; padding: 0 8rpx; border-radius: 4rpx; }

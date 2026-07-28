@@ -1,16 +1,19 @@
 // 云函数：获取基金官方实时估值（+ 净值），跑在腾讯云国内节点，外网请求不受小程序合法域名限制。
 // 数据源：东方财富官方估值排行 GetFundGZList（AkShare fund_value_estimation_em 同源），内含官方 gsz/gszzl。
+// ⚠️ 2026-07 监管收紧后 GetFundGZList 已下架（恒返回"暂无数据"），此处保留探测以防恢复；
+//    当前实际主路径：FundMNFInfo 出名称/净值/净值涨跌率 → 小程序端"前十大重仓自算"出盘中估值。
+//    FundMNFInfo 对数据中心 IP 有随机风控(61136403)，故带重试；两上游全空则返回失败，端上回落直连。
 // 该接口只能拉全量排行(约 2.4 万只、~7MB)、不支持按代码查，故在云函数里【拉一次、缓存 2 分钟、按代码返回】。
 // 官方估值表未收录的基金(部分 LOF/特定基金) → 返回 source:'none'，由小程序端用"前十大重仓自算"兜底。
 const cloud = require('wx-server-sdk');
 const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
-
+// ⚠️ 不要伪装浏览器 UA：东财风控会拦截"自称 Chrome 但请求特征不符"的客户端(61136403 网络繁忙)，
+//    node 不带 UA 反而全部放行（fundmobapi / rankhandler 实测均通过，rankhandler 只校验 Referer）。
 function httpGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': UA, ...headers }, timeout: 25000 }, (res) => {
+    const req = https.get(url, { headers: { ...headers }, timeout: 25000 }, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
       res.on('end', () => resolve({ statusCode: res.statusCode || 0, body: data }));
@@ -40,11 +43,15 @@ async function loadOfficialGZ() {
   return gzCache;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // FundMNFInfo 取净值 + 净值日期/估值时间/净值涨跌率（官方估值表没有的基金用它兜底净值与"收盘已出净值"判定）
 async function loadNav(codes) {
+  // deviceid 每次随机：东财风控按 deviceid+IP 维度阵发拦截(61136403)，固定值更易被持续命中
+  const deviceid = Math.random().toString(36).slice(2, 12);
   const url =
     'https://fundmobapi.eastmoney.com/FundMNewApi/FundMNFInfo' +
-    `?pageIndex=1&pageSize=${codes.length}&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=cf&Fcodes=${codes.join(',')}`;
+    `?pageIndex=1&pageSize=${codes.length}&plat=Android&appType=ttjj&product=EFund&Version=1&deviceid=${deviceid}&Fcodes=${codes.join(',')}`;
   const r = await httpGet(url);
   const j = JSON.parse(r.body);
   const list = (j && j.Datas) || [];
@@ -53,6 +60,20 @@ async function loadNav(codes) {
     if (d && d.FCODE) map[d.FCODE] = d;
   }
   return map;
+}
+
+// 东财风控(ErrCode 61136403 "网络繁忙")对数据中心 IP 拦截率高且随机，重试可显著提高命中
+async function loadNavWithRetry(codes, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const m = await loadNav(codes);
+      if (Object.keys(m).length > 0) return m;
+    } catch (e) {
+      /* 重试 */
+    }
+    if (i < tries - 1) await sleep(400 * (i + 1));
+  }
+  return Object.create(null);
 }
 
 // 基金排行：web rankhandler 需东财 Referer(小程序端设不了)，故经云函数中转。
@@ -98,10 +119,13 @@ exports.main = async (event) => {
     /* 官方表失败：全部走净值/自算兜底 */
   }
   let navMap = Object.create(null);
-  try {
-    navMap = await loadNav(valid);
-  } catch (e) {
-    /* 忽略 */
+  navMap = await loadNavWithRetry(valid);
+
+  // 两个上游全空（估值排行已下架 + 净值接口被风控）时不能返回"成功的空壳"，
+  // 必须报失败，让小程序端回落直连 fundmobapi（住宅 IP 通常不被拦）。
+  const gzEmpty = !gz.map || Object.keys(gz.map).length === 0;
+  if (gzEmpty && Object.keys(navMap).length === 0) {
+    return { success: false, error: '上游无数据：估值排行已下架，净值接口被风控拦截' };
   }
 
   const data = [];

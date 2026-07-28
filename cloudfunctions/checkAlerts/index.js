@@ -10,11 +10,10 @@ const db = cloud.database();
 const _ = db.command;
 
 const TEMPLATE_ID = 'xKSDHWEZPtQaJq_73F5JVQk6UI8T8SlfmkILDfCLV_E';
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 Safari/537.36';
-
+// ⚠️ 不要伪装浏览器 UA：东财风控拦截"自称 Chrome 但特征不符"的请求(61136403)，不带 UA 反而放行
 function httpGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': UA, ...headers }, timeout: 25000 }, (res) => {
+    const req = https.get(url, { headers: { ...headers }, timeout: 25000 }, (res) => {
       let d = '';
       res.on('data', (c) => (d += c));
       res.on('end', () => resolve(d));

@@ -1,5 +1,22 @@
 // 纯计算:由持仓+行情数据算出报告事实(facts)。不 require 任何云 SDK,便于本地单测。
-// 口径:navDate===today 用净值涨跌(nav);否则有估值用估值(est);都没有则该基金不计当日盈亏。
+// 当日涨跌口径(优先级):
+//   ① navDate===today → 已确认净值涨跌(nav,最准,盘后可用)
+//   ② 官方估值 estChg(GetFundGZList,已下架,现恒空)
+//   ③ 前十大重仓×实时涨跌自算(computed,盘中/净值未出时的兜底,消除"数据缺失")
+//   都没有 → 计入 navMissing
+// 前十大加权平均涨跌:Σ(占净比×涨跌)/Σ(占净比);剔除 |涨跌|>30% 的脏报价(停牌残值)
+function estimateFromTopStocks(topStocks) {
+  if (!Array.isArray(topStocks) || !topStocks.length) return null;
+  let sw = 0, swc = 0;
+  for (const s of topStocks) {
+    const chg = Number(s.chg);
+    const w = Number(s.weight);
+    if (!Number.isFinite(chg) || Math.abs(chg) > 30 || !Number.isFinite(w) || w <= 0) continue;
+    sw += w; swc += w * chg;
+  }
+  return sw > 0 ? round2(swc / sw) : null;
+}
+
 function computeFacts(holdings, fundData, indexes, today) {
   if (!Array.isArray(holdings) || !holdings.length) return null;
 
@@ -20,7 +37,9 @@ function computeFacts(holdings, fundData, indexes, today) {
     } else if (d.estChg != null && Number.isFinite(Number(d.estChg))) {
       dayChg = Number(d.estChg); chgSource = 'est';
     } else {
-      navMissing.push(h.code);
+      const est = estimateFromTopStocks(d.topStocks);
+      if (est != null) { dayChg = est; chgSource = 'computed'; }
+      else navMissing.push(h.code);
     }
 
     let dayProfitAmt = 0;

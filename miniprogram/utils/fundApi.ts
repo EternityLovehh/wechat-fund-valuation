@@ -225,7 +225,12 @@ async function getBaseViaCloud(valid: string[]): Promise<FundInfo[] | null> {
     const res: any = await wx.cloud.callFunction({ name: 'getFund', data: { codes: valid } });
     const r = res && res.result;
     if (r && r.success && Array.isArray(r.data)) {
-      return r.data.filter((d: any) => d && d.code).map(mapCloudDatum);
+      const out = r.data.filter((d: any) => d && d.code).map(mapCloudDatum);
+      // 云函数 IP 被上游风控时会"成功"返回整批空壳(name/netValue 全空)。
+      // 此时必须视同失败回落直连(手机住宅 IP 通常不被拦)，否则名称、净值、自算估值全部断供。
+      const usable = out.some((f: FundInfo) => f.name || f.netValue > 0);
+      if (out.length > 0 && usable) return out;
+      console.warn('[估值诊断] 云函数返回整批空数据(上游风控/下架)，回落直连 fundmobapi');
     }
   } catch (e) {
     console.warn('[估值诊断] 云函数不可用，回落直连 fundmobapi:', e);
@@ -250,10 +255,32 @@ async function getBaseViaDirect(valid: string[]): Promise<FundInfo[]> {
   return out;
 }
 
+// 基金名称本地缓存：名称几乎不变，长期缓存安全。
+// 上游整体失效/风控时用缓存补名，避免列表变成一排空名。
+const NAME_CACHE_KEY = 'fund_name_cache';
+let nameCacheMem: Record<string, string> | null = null;
+function fillAndSaveNames(list: FundInfo[]): void {
+  if (!nameCacheMem) {
+    try { nameCacheMem = wx.getStorageSync(NAME_CACHE_KEY) || {}; } catch (e) { nameCacheMem = {}; }
+  }
+  const cache = nameCacheMem as Record<string, string>;
+  let dirty = false;
+  for (const f of list) {
+    if (f.name) {
+      if (cache[f.code] !== f.name) { cache[f.code] = f.name; dirty = true; }
+    } else if (cache[f.code]) {
+      f.name = cache[f.code];
+    }
+  }
+  if (dirty) {
+    try { wx.setStorageSync(NAME_CACHE_KEY, cache); } catch (e) { /* 存储失败不影响展示 */ }
+  }
+}
+
 // 批量获取基金估值：
-//   1) 云函数优先 → 东财官方估值排行 GetFundGZList（含官方 gsz，最准；AkShare 同源）
-//   2) 云函数不可用 → 直连 fundmobapi（仅净值）
-//   3) 仍无官方估值(source==='none')的基金 → 前十大重仓自算兜底（全覆盖）
+//   1) 云函数优先 → 东财官方估值排行 GetFundGZList（2026-07 已随监管下架，保留探测以防恢复）
+//   2) 云函数不可用/整批空数据 → 直连 fundmobapi（名称+净值+净值涨跌率）
+//   3) 无官方估值(source==='none')的基金 → 前十大重仓自算兜底（当前为主路径，全覆盖）
 export async function getBatchFundEstimate(
   codes: string[],
   opts?: { recordAccuracy?: boolean }
@@ -262,6 +289,7 @@ export async function getBatchFundEstimate(
   if (valid.length === 0) return [];
 
   const out: FundInfo[] = (await getBaseViaCloud(valid)) || (await getBaseViaDirect(valid));
+  fillAndSaveNames(out);
 
   // 官方无估值(source==='none')的基金，用前十大重仓自算补上。
   // 不限时段：非交易时段个股为最近收盘价，算出的即"截至最近收盘的估值"，与旧 fundgz 行为一致。
@@ -316,19 +344,21 @@ export interface WeightedHolding {
 }
 
 // 重仓/资产配置按季度披露，缓存 6 小时，避免每次刷新重复请求
-const holdingsCache = new Map<string, { ts: number; holdings: WeightedHolding[] }>();
-const stockRatioCache = new Map<string, { ts: number; ratio: number | null }>();
+// etfCode：ETF联接基金的目标 ETF 代码(接口 ETFCODE 字段)，非联接基金为空串
+const holdingsCache = new Map<string, { ts: number; holdings: WeightedHolding[]; etfCode: string }>();
+const stockRatioCache = new Map<string, { ts: number; ratios: { gp: number; jj: number } | null }>();
 const HOLDINGS_TTL = 6 * 60 * 60 * 1000;
 
 // 上次成功算出的估算涨跌：某轮重仓/行情取数失败时用它兜底，避免估值在刷新/返回时闪没
 const estimateCache = new Map<string, { ts: number; estimatedGrowth: number }>();
 
-// 取某基金的股票占净比(%)，用于把"前十大加权涨跌"按真实股票仓位摊分（现金/债券不随股价波动）。
+// 取某基金的资产占比(%)：gp=股票占净比、jj=基金占净比(ETF联接基金持有目标ETF的仓位)。
+// 用于把"前十大加权涨跌"按真实仓位摊分（现金/债券不随股价波动）。
 // 数据源：东财资产配置接口(轻量)，季度披露；取不到返回 null（调用方退回不摊分的旧口径）。
-function getFundStockRatio(code: string): Promise<number | null> {
+function getFundAssetRatios(code: string): Promise<{ gp: number; jj: number } | null> {
   const cached = stockRatioCache.get(code);
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
-    return Promise.resolve(cached.ratio);
+    return Promise.resolve(cached.ratios);
   }
   return new Promise((resolve) => {
     wx.request({
@@ -340,10 +370,13 @@ function getFundStockRatio(code: string): Promise<number | null> {
           let p: any = res.data;
           if (typeof p === 'string') p = JSON.parse(p);
           const row = (p && p.Datas && p.Datas[0]) || null;
-          const gp = row ? parseFloat(row.GP) : NaN; // GP=股票占净比
-          const ratio = !isNaN(gp) && gp > 0 ? Math.min(gp, 100) : null;
-          stockRatioCache.set(code, { ts: Date.now(), ratio });
-          resolve(ratio);
+          const gpRaw = row ? parseFloat(row.GP) : NaN; // GP=股票占净比
+          const jjRaw = row ? parseFloat(row.JJ) : NaN; // JJ=基金占净比(联接基金≈90%+)
+          const gp = !isNaN(gpRaw) && gpRaw > 0 ? Math.min(gpRaw, 100) : 0;
+          const jj = !isNaN(jjRaw) && jjRaw > 0 ? Math.min(jjRaw, 100) : 0;
+          const ratios = gp > 0 || jj > 0 ? { gp, jj } : null;
+          stockRatioCache.set(code, { ts: Date.now(), ratios });
+          resolve(ratios);
         } catch (e) {
           resolve(null);
         }
@@ -363,6 +396,8 @@ export interface FundBaseInfo {
   riskLabel: string; // 风险等级(中文)
   fundType: string;  // 类型
   bench: string;     // 业绩比较基准
+  indexCode: string; // 跟踪指数代码(指数型/联接基金,如 399997;非指数基金为空)
+  indexName: string; // 跟踪指数名(如"中证白酒指数";非指数基金为空)
 }
 const RISK_LABELS: Record<string, string> = { '1': '低风险', '2': '中低风险', '3': '中风险', '4': '中高风险', '5': '高风险' };
 const baseInfoCache = new Map<string, { ts: number; info: FundBaseInfo | null }>();
@@ -390,7 +425,9 @@ export function getFundBaseInfo(code: string): Promise<FundBaseInfo | null> {
             scaleDate: clean(d.FEGMRQ),
             riskLabel: RISK_LABELS[String(d.RISKLEVEL)] || clean(d.RISKLEVEL),
             fundType: clean(d.FTYPE),
-            bench: clean(d.BENCH)
+            bench: clean(d.BENCH),
+            indexCode: /^\d{6}$/.test(clean(d.INDEXCODE)) ? clean(d.INDEXCODE) : '',
+            indexName: clean(d.INDEXNAME)
           };
           baseInfoCache.set(code, { ts: Date.now(), info });
           resolve(info);
@@ -641,6 +678,14 @@ const THEME_RULES: Array<{ kw: string[]; label: string }> = [
   { kw: ['德国', '法国', '欧洲'], label: '欧洲' }
 ];
 
+// 跟踪指数名 → 关联板块显示名：去掉"指数/(价格)/收益/全收益"等后缀，保留核心（如"国证半导体芯片指数"→"国证半导体芯片"）
+function indexNameToLabel(indexName: string): string {
+  let s = String(indexName || '').trim();
+  if (!s) return '';
+  s = s.replace(/[（(](价格|收益|全收益|净收益)[)）]/g, '').replace(/指数$/, '').trim();
+  return s.length > 8 ? s.slice(0, 8) : s; // 列宽有限，超长截断
+}
+
 // 基金名 → 主题标签(命中返回,否则空)
 function themeFromName(name: string): string {
   const n = (name || '').toUpperCase();
@@ -702,7 +747,20 @@ export async function getFundBoards(
   const valid = Array.from(new Set(codes.filter((c) => /^\d{6}$/.test(c))));
   if (valid.length === 0) return out;
 
-  const holdingsList = await Promise.all(valid.map((c) => getTopHoldingsWeighted(c)));
+  // 基本信息(含跟踪指数名)：估值流程已预取并缓存，这里基本是缓存命中，几乎无额外请求
+  const [holdingsList, baseList] = await Promise.all([
+    Promise.all(valid.map((c) => getTopHoldingsWeighted(c))),
+    Promise.all(valid.map((c) => getFundBaseInfo(c).catch(() => null)))
+  ]);
+  // 指数/联接基金 → 跟踪指数名当关联板块（最准；区分同为"半导体"却跟踪不同指数的基金）
+  const indexLabelMap = new Map<string, string>();
+  valid.forEach((c, i) => {
+    const b = baseList[i];
+    if (b && b.indexCode && b.fundType.indexOf('指数') >= 0) {
+      const label = indexNameToLabel(b.indexName);
+      if (label) indexLabelMap.set(c, label);
+    }
+  });
   // 概念聚合用全部(≤10)持仓;涨跌%用前5大
   const fundTop = valid.map((c, i) => ({ code: c, name: nameMap[c] || '', top: holdingsList[i] }));
   const stockCodes = Array.from(new Set(fundTop.flatMap((f) => f.top.map((s) => s.code))));
@@ -738,10 +796,13 @@ export async function getFundBoards(
 
     // ① 名称/指数主题
     const nameTheme = themeFromName(f.name);
+    // ⓪ 指数基金跟踪指数名（最准，优先级最高）
+    const indexLabel = indexLabelMap.get(f.code) || '';
 
-    // 决策:概念集中(≥50%)→细概念;否则名称主题(宽基指数名);再否则退而求其次用概念
+    // 决策:指数基金用跟踪指数名;否则概念集中(≥50%)→细概念;否则名称主题;再否则退而求其次用概念
     let board = '';
-    if (domShare >= 0.5 && dom) board = dom;
+    if (indexLabel) board = indexLabel;
+    else if (domShare >= 0.5 && dom) board = dom;
     else if (nameTheme) board = nameTheme;
     else if (dom) board = dom;
 
@@ -762,10 +823,11 @@ export async function getFundBoards(
 }
 
 // 取某基金前十大重仓（代码 + 简称 + 占净值比），带缓存
-export function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
+// 内部：持仓明细 + 目标ETF代码（同一响应，共用缓存）
+function fetchHoldingsEntry(code: string): Promise<{ holdings: WeightedHolding[]; etfCode: string }> {
   const cached = holdingsCache.get(code);
   if (cached && Date.now() - cached.ts < HOLDINGS_TTL) {
-    return Promise.resolve(cached.holdings);
+    return Promise.resolve(cached);
   }
   return new Promise((resolve) => {
     wx.request({
@@ -786,15 +848,23 @@ export function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]>
               holdings.push({ code: c, name: String(s.GPJC || '').trim(), weight: w });
             }
           }
-          holdingsCache.set(code, { ts: Date.now(), holdings });
-          resolve(holdings);
+          // ETF联接基金：接口给出目标 ETF 代码（沪 5xxxxx / 深 15xxxx），供自算直接用 ETF 实时涨跌
+          const etfRaw = String((p && p.Datas && p.Datas.ETFCODE) || '').trim();
+          const etfCode = /^\d{6}$/.test(etfRaw) ? etfRaw : '';
+          const entry = { holdings, etfCode };
+          holdingsCache.set(code, { ts: Date.now(), ...entry });
+          resolve(entry);
         } catch (e) {
-          resolve([]);
+          resolve({ holdings: [], etfCode: '' });
         }
       },
-      fail: () => resolve([])
+      fail: () => resolve({ holdings: [], etfCode: '' })
     });
   });
+}
+
+export function getTopHoldingsWeighted(code: string): Promise<WeightedHolding[]> {
+  return fetchHoldingsEntry(code).then((e) => e.holdings);
 }
 
 // 个股行情缓存：20 秒内复用，避免快速刷新/从详情页返回时反复猛打 push2 导致限流。
@@ -808,7 +878,9 @@ function fetchTencentChanges(codes: string[]): Promise<Map<string, number>> {
   const m = new Map<string, number>();
   if (codes.length === 0) return Promise.resolve(m);
   const toTx = (c: string) => {
-    const mkt = c.startsWith('6') || c.startsWith('9') ? 'sh' : c.startsWith('4') || c.startsWith('8') ? 'bj' : 'sz';
+    // 6/9=沪A、5=沪基金(ETF)、4/8=北交所、其余(0/1/2/3)=深市(股票+15xxxx ETF)
+    const mkt = c.startsWith('6') || c.startsWith('9') || c.startsWith('5') ? 'sh'
+      : c.startsWith('4') || c.startsWith('8') ? 'bj' : 'sz';
     return `s_${mkt}${c}`;
   };
   const CHUNK = 60;
@@ -848,7 +920,7 @@ function fetchTencentChanges(codes: string[]): Promise<Map<string, number>> {
 function fetchPush2Changes(codes: string[]): Promise<Map<string, number>> {
   const m = new Map<string, number>();
   if (codes.length === 0) return Promise.resolve(m);
-  const toSecid = (c: string) => `${c.startsWith('6') || c.startsWith('9') ? '1' : '0'}.${c}`;
+  const toSecid = (c: string) => `${c.startsWith('6') || c.startsWith('9') || c.startsWith('5') ? '1' : '0'}.${c}`;
   const CHUNK = 50;
   const chunks: string[][] = [];
   for (let i = 0; i < codes.length; i += CHUNK) chunks.push(codes.slice(i, i + CHUNK));
@@ -915,26 +987,92 @@ export async function getBatchStockChangeMap(codes: string[]): Promise<Map<strin
   return map;
 }
 
+// 指数实时涨跌%：指数代码空间与个股冲突(000300 既是沪深300也形似深市个股)，
+// 不能复用 getBatchStockChangeMap，单独取并校验响应类别标记 ~ZS~(指数)防串码。
+// 399xxx(深证/创业板系) → sz；其余(000/930/932 中证·上证系) → sh。20s 缓存。
+const indexChangeCache = new Map<string, { ts: number; chg: number | null }>();
+function fetchIndexChange(indexCode: string): Promise<number | null> {
+  const hit = indexChangeCache.get(indexCode);
+  if (hit && Date.now() - hit.ts < STOCK_CHANGE_TTL) return Promise.resolve(hit.chg);
+  const mkt = indexCode.startsWith('399') ? 'sz' : 'sh';
+  return new Promise((resolve) => {
+    wx.request({
+      url: `https://qt.gtimg.cn/q=s_${mkt}${indexCode}`,
+      method: 'GET',
+      success: (res: any) => {
+        let chg: number | null = null;
+        try {
+          const text = typeof res.data === 'string' ? res.data : '';
+          const m = text.match(/="([^"]*)"/);
+          if (m && m[1].indexOf('~ZS') >= 0) {
+            const v = parseFloat(m[1].split('~')[5]);
+            if (Number.isFinite(v)) chg = v;
+          }
+        } catch (e) { /* 忽略 */ }
+        indexChangeCache.set(indexCode, { ts: Date.now(), chg });
+        resolve(chg);
+      },
+      fail: () => resolve(null) // 请求失败不写缓存，下轮重试
+    });
+  });
+}
+
 // 为多只基金自算估值：Map<基金代码, {estimatedValue, estimatedGrowth}>
 async function computeEstimatesForFunds(
   items: { code: string; netValue: number }[]
 ): Promise<Map<string, { estimatedValue: number; estimatedGrowth: number }>> {
   const out = new Map<string, { estimatedValue: number; estimatedGrowth: number }>();
-  // 1) 各基金重仓 + 股票占净比（均带缓存，季度数据）
-  const [holdingsList, ratioList] = await Promise.all([
-    Promise.all(items.map((it) => getTopHoldingsWeighted(it.code))),
-    Promise.all(items.map((it) => getFundStockRatio(it.code)))
+  // 1) 各基金重仓(+目标ETF代码) + 资产占比 + 基本信息(跟踪指数代码)（均带缓存，季度/半静态数据）
+  const [holdingEntries, ratioList, baseList] = await Promise.all([
+    Promise.all(items.map((it) => fetchHoldingsEntry(it.code))),
+    Promise.all(items.map((it) => getFundAssetRatios(it.code))),
+    Promise.all(items.map((it) => getFundBaseInfo(it.code)))
   ]);
-  // 2) 汇总全部个股代码，一次批量取实时行情
+  // 2) 汇总全部个股代码（含联接基金的目标ETF），一次批量取实时行情；
+  //    指数型基金的跟踪指数行情单独取（代码空间与个股冲突）
   const allStockCodes: string[] = [];
-  holdingsList.forEach((hs) => hs.forEach((h) => allStockCodes.push(h.code)));
-  const changeMap = await getBatchStockChangeMap(allStockCodes);
-  // 3) 逐基金加权：
-  //    前十大加权平均涨跌 top10Avg = Σ(占比 × 涨跌) / Σ(占比)
-  //    再按股票占净比摊分：估算涨跌 = top10Avg × 股票占净比/100
-  //    （现金/债券不随股价波动，取不到股票占比时退回不摊分的旧口径）
+  holdingEntries.forEach((e) => {
+    e.holdings.forEach((h) => allStockCodes.push(h.code));
+    if (e.etfCode) allStockCodes.push(e.etfCode);
+  });
+  const fundIndexCode = (b: FundBaseInfo | null) =>
+    b && b.indexCode && b.fundType.indexOf('指数') >= 0 ? b.indexCode : '';
+  const idxCodes = Array.from(new Set(baseList.map(fundIndexCode).filter(Boolean)));
+  const [changeMap, idxPairs] = await Promise.all([
+    getBatchStockChangeMap(allStockCodes),
+    Promise.all(idxCodes.map(async (c) => [c, await fetchIndexChange(c)] as [string, number | null]))
+  ]);
+  const idxChgMap = new Map(idxPairs);
+  // 3) 逐基金估算，按口径优先级：
+  //    ① 指数型/联接基金：跟踪指数实时涨跌 × (股票+基金仓位)/100 —— 指数=全部成分股加权，
+  //       等价于"全量持仓"口径，优于前十大(覆盖不全)与 ETF二级价(有折溢价噪音)。
+  //    ② ETF联接兜底（指数行情没取到）：目标ETF实时涨跌 × (jj+gp)/100。
+  //    ③ 其余（主动基金，只披露前十大——季报制度上限）：
+  //       top10Avg = Σ(占比×涨跌)/Σ(占比)，再按股票占净比摊分 × gp/100
+  //       （现金/债券不随股价波动，取不到股票占比时退回不摊分的旧口径）
   items.forEach((it, i) => {
-    const holdings = holdingsList[i];
+    const { holdings, etfCode } = holdingEntries[i];
+    const ratios = ratioList[i];
+    // 权益敞口：指数基金≈gp，联接基金≈jj+gp；缺资产配置时按典型指数基金仓位 95% 估
+    const exposure = ratios ? Math.min(ratios.gp + ratios.jj, 100) / 100 : 0.95;
+
+    const idxCode = fundIndexCode(baseList[i]);
+    const idxChg = idxCode ? idxChgMap.get(idxCode) : null;
+    if (idxChg != null && Number.isFinite(idxChg) && Math.abs(idxChg) <= 30) {
+      const estimatedGrowth = idxChg * exposure;
+      out.set(it.code, { estimatedValue: it.netValue * (1 + estimatedGrowth / 100), estimatedGrowth });
+      estimateCache.set(it.code, { ts: Date.now(), estimatedGrowth });
+      return;
+    }
+
+    const etfChg = etfCode ? changeMap.get(etfCode) : undefined;
+    if (etfChg != null && Number.isFinite(etfChg) && Math.abs(etfChg) <= 30 && ratios && ratios.jj > 0) {
+      const estimatedGrowth = etfChg * exposure;
+      out.set(it.code, { estimatedValue: it.netValue * (1 + estimatedGrowth / 100), estimatedGrowth });
+      estimateCache.set(it.code, { ts: Date.now(), estimatedGrowth });
+      return;
+    }
+
     let sumW = 0;
     let sumWC = 0;
     for (const h of holdings) {
@@ -947,7 +1085,7 @@ async function computeEstimatesForFunds(
     }
     if (sumW > 0) {
       const top10Avg = sumWC / sumW;
-      const stockRatio = ratioList[i];
+      const stockRatio = ratios && ratios.gp > 0 ? ratios.gp : null;
       const estimatedGrowth = stockRatio != null ? top10Avg * (stockRatio / 100) : top10Avg;
       const estimatedValue = it.netValue * (1 + estimatedGrowth / 100);
       out.set(it.code, { estimatedValue, estimatedGrowth });

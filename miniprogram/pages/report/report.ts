@@ -63,12 +63,26 @@ Page({
       }
     } catch (e) {
       wx.hideLoading();
-      wx.showToast({ title: '生成超时或失败', icon: 'none' });
-      // 端侧超时不代表服务端失败:云函数常在后台跑完并已落库成功,
-      // 延时刷新列表以捞取可能已生成好的报告,避免用户误以为完全失败。
-      setTimeout(() => { this.loadList(); }, 3000);
+      wx.showToast({ title: '生成较慢，正在后台完成…', icon: 'none' });
+      // 端侧超时不代表服务端失败:云函数常在后台跑完(约30-45s)并已落库成功。
+      // 多次轮询捞取当日已生成好的报告(而非只捞一次3s),捞到 ok 就自动打开。
+      this.pollForTodayReport(6);
     }
     this.setData({ generating: false });
+  },
+
+  // 生成后端侧超时的兜底:每 8s 轮询一次列表,发现当日 ok 报告即自动打开;最多 tries 次
+  pollForTodayReport(tries: number) {
+    if (tries <= 0) return;
+    setTimeout(async () => {
+      await this.loadList();
+      const top = this.data.list[0];
+      if (top && top.status === 'ok') {
+        this.openDetail({ currentTarget: { dataset: { id: top._id } } });
+      } else {
+        this.pollForTodayReport(tries - 1);
+      }
+    }, 8000);
   },
 
   async onSubscribe() {
